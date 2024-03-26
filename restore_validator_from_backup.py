@@ -40,6 +40,7 @@ def regenerate_miner_positions(perform_backup=True):
             bt.logging.info(f"    {key}: {value}")
 
     position_manager = PositionManager()
+    position_manager.init_cache_files()
     # We want to get the smallest processed_ms timestamp across all positions in the backup and then compare this to
     # the smallest processed_ms timestamp across all orders on the local filesystem. If the backup youngest timestamp is
     # older than the local youngest timestamp, we will not regenerate the positions. Similarly for the oldest timestamp.
@@ -92,7 +93,13 @@ def regenerate_miner_positions(perform_backup=True):
         # Validate that the positions were written correctly
         disk_positions = position_manager.get_all_miner_positions(hotkey, sort_positions=True)
         #bt.logging.info(f'disk_positions: {disk_positions}, positions: {positions}')
-        assert disk_positions == positions, f"disk_positions: {disk_positions}, positions: {positions}"
+        n_disk_positions = len(disk_positions)
+        n_memory_positions = len(positions)
+        memory_p_uuids = set([p.position_uuid for p in positions])
+        disk_p_uuids = set([p.position_uuid for p in disk_positions])
+        assert n_disk_positions == n_memory_positions, f"n_disk_positions: {n_disk_positions}, n_memory_positions: {n_memory_positions}"
+        assert memory_p_uuids == disk_p_uuids, f"memory_p_uuids: {memory_p_uuids}, disk_p_uuids: {disk_p_uuids}"
+
 
     bt.logging.info(f"regenerating {len(data['eliminations'])} eliminations")
     position_manager.write_eliminations_to_disk(data['eliminations'])
