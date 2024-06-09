@@ -14,6 +14,7 @@ from vali_objects.vali_dataclasses.order_signal import Signal
 import bittensor as bt 
 
 app = Flask(__name__)
+bt.logging.info(f"Server init.")
 
 secrets_json_path = ValiConfig.BASE_DIR + "/mining/miner_secrets.json"
 # Define your API key
@@ -86,6 +87,6 @@ def handle_data():
     )
 
 if __name__ == "__main__":
+    bt.logging.info(f"Signals Server Started")
     waitress.serve(app, host="0.0.0.0", port=80, connection_limit=1000)
    # print('Successfully started run_receive_signals_server.')
-    bt.logging.info(f"Signals Server Started")
