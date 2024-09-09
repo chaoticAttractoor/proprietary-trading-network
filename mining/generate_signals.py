@@ -325,8 +325,12 @@ if __name__ == "__main__":
 
         input = process_data_for_predictions(input)
         print(f'Last update: {btc.last_update}')
-        if (btc.last_update is None) or ((pd.to_datetime(input['ds'].tail(1).values[0]- round_time_to_nearest_five_minutes(btc.last_update) ) > timedelta(minutes=5)) ):            
-            # feed into model to predict 
+        latest_data_time = pd.to_datetime(input['ds'].tail(1).values[0])  # Ensure this is a datetime object
+        last_update_time = round_time_to_nearest_five_minutes(btc.last_update)  # Ensure this is a datetime object
+
+        # Perform the comparison if btc.last_update exists
+        if (btc.last_update is None) or ((latest_data_time - last_update_time) > timedelta(minutes=5)):
+            # Proceed with the logic here
             
       
 
