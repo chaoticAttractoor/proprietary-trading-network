@@ -325,8 +325,7 @@ if __name__ == "__main__":
 
         input = process_data_for_predictions(input)
         print(f'Last update: {btc.last_update}')
-        
-        if (btc.last_update is None) or ((round_time_to_nearest_five_minutes(btc.last_update) - pd.to_datetime(input['ds'].tail(1).values[0]) > timedelta(minutes=5)) ):            
+        if (btc.last_update is None) or ((pd.to_datetime(input['ds'].tail(1).values[0]- round_time_to_nearest_five_minutes(btc.last_update) ) > timedelta(minutes=5)) ):            
             # feed into model to predict 
             
       
@@ -352,6 +351,8 @@ if __name__ == "__main__":
                     if (current_pnl is not None)  or (exit_long is True) :
                         
                         order = 'FLAT'
+                        btc.log_update()
+
                 
             if order != 'FLAT': 
                 print('No Open trade - running prediction ')
@@ -362,6 +363,7 @@ if __name__ == "__main__":
             #  signals = mining_utils.assess_signals(output)
                 order= mining_utils.map_signals(output)
                 print(f'order is {order}')
+                btc.log_update()
                 
                           
             if order != 'PASS' : 
