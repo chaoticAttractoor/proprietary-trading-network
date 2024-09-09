@@ -18,7 +18,7 @@ from signals import process_data_for_predictions,LONG_ENTRY
 import bittensor as bt
 import duckdb
 import numpy as np
-from datetime import timedelta
+from datetime import timedelta 
 
 model = mining_utils.load_model()
 TP = 0.05 
@@ -324,15 +324,17 @@ if __name__ == "__main__":
         print(f'{price}')
 
         input = process_data_for_predictions(input)
+        print(f'Last update: {btc.last_update}')
         
-        if (btc.last_update is None) or ((pd.to_datetime(input['ds'].tail(1).values[0]) - pd.to_datetime(btc.last_update)) >= timedelta(minutes=5)):
+        if (btc.last_update is None) or ((round_time_to_nearest_five_minutes(btc.last_update) - pd.to_datetime(input['ds'].tail(1).values[0]) > timedelta(minutes=5)) ):            
             # feed into model to predict 
             
       
 
             lasttrade = btc.check_last_trade()
             
-            if (isinstance(lasttrade, pd.DataFrame)) and not lasttrade.empty:
+            if isinstance(lasttrade, pd.DataFrame) and not lasttrade.empty:
+                 print('Open trade detected. ')
                 
                  if lasttrade['trade_closed'].tail(1).isnull():
 
@@ -344,13 +346,16 @@ if __name__ == "__main__":
                         
                     if current_pnl > TP :  
                         exit_long = True
-                        
+                        print('Profit Target reached- exiting ')
+
                     
                     if (current_pnl is not None)  or (exit_long is True) :
                         
                         order = 'FLAT'
                 
             if order != 'FLAT': 
+                print('No Open trade - running prediction ')
+
                 preds = mining_utils.multi_predict(model,input,2)
                 modelname = str(model.models[0])
                 output = mining_utils.gen_signals_from_predictions(predictions= preds, hist = input ,modelname=modelname ) 
@@ -360,7 +365,8 @@ if __name__ == "__main__":
                 
                           
             if order != 'PASS' : 
-            
+                print('Trade signal detected. Assessing impact.')
+
                 old_position = btc.position_open
                     
                 btc.set_position(new_position=order,price=float(price) )
@@ -384,7 +390,7 @@ if __name__ == "__main__":
                     data = {
                         'trade_pair':trade_pair ,
                         'order_type': order_type,
-                        'leverage': 1.0,
+                        'leverage': 0.5,
                         'api_key':API_KEY,
                         } 
                     
