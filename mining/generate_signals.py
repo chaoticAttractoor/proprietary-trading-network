@@ -312,6 +312,7 @@ if __name__ == "__main__":
             
 
         # load live data
+        order = None 
         input = fetch_binance_data()
         bt.logging.info(f"Latest candle: {input['ds'].tail(1).values[0]}")
         print(f"Latest candle: {input['ds'].tail(1).values[0]}")
@@ -329,7 +330,7 @@ if __name__ == "__main__":
         last_update_time = round_time_to_nearest_five_minutes(btc.last_update)  # Ensure this is a datetime object
 
         # Perform the comparison if btc.last_update exists
-        if (btc.last_update is None) or ((latest_data_time - last_update_time) > timedelta(minutes=5)):
+        if (btc.last_update is None) or ((latest_data_time - last_update_time) >= timedelta(minutes=5)):
             # Proceed with the logic here
             
       
