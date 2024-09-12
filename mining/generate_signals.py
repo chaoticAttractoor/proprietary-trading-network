@@ -340,7 +340,7 @@ if __name__ == "__main__":
             if isinstance(lasttrade, pd.DataFrame) and not lasttrade.empty:
                  print('Open trade detected. ')
                 
-                 if lasttrade['trade_closed'].iloc[-1].isnull():
+                 if pd.isna(lasttrade['trade_closed'].iloc[-1]):
 
                     current_pnl = None
                     exit_long = False 
