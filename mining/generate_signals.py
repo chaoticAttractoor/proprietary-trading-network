@@ -347,6 +347,7 @@ if __name__ == "__main__":
                     
                         
                     current_pnl = price / lasttrade['open_price'].tail(1) - 1 
+                    print(f'Current PnL is : {current_pnl}')
                         
                     if current_pnl > TP :  
                         exit_long = True
