@@ -22,6 +22,7 @@ from datetime import timedelta
 
 model = mining_utils.load_model()
 TP = 0.05 
+SL = 0.025
 secrets_json_path = ValiConfig.BASE_DIR + "/mining/miner_secrets.json"
 # Define your API key
 if os.path.exists(secrets_json_path):
@@ -352,9 +353,13 @@ if __name__ == "__main__":
                     if current_pnl > TP :  
                         exit_long = True
                         print('Profit Target reached- exiting ')
+                        
+                    if current_pnl < SL: 
+                        exit_long = True
+                        print('Stop Loss Triggered. ')
 
                     
-                    if (current_pnl is not None)  or (exit_long is True) :
+                    if (current_pnl is not None)  and (exit_long is True) :
                         
                         order = 'FLAT'
                         btc.log_update()
