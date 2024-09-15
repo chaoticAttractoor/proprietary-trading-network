@@ -22,7 +22,7 @@ from datetime import timedelta
 
 model = mining_utils.load_model()
 TP = 0.05 
-SL = 0.025
+SL = -0.025
 secrets_json_path = ValiConfig.BASE_DIR + "/mining/miner_secrets.json"
 # Define your API key
 if os.path.exists(secrets_json_path):
