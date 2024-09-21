@@ -30,7 +30,7 @@ class ValiConfig:
 
     # Fees take into account exiting and entering a position, liquidity, and futures fees
     PERF_LEDGER_REFRESH_TIME_MS = 1000 * 60 * 5  # minutes
-    CHALLENGE_PERIOD_REFRESH_TIME_MS = 1000 * 60 * 5  # minutes
+    CHALLENGE_PERIOD_REFRESH_TIME_MS = 1000 * 60 * 1  # minutes
     MDD_CHECK_REFRESH_TIME_MS = 60 * 1000  # 60 seconds
 
     # Positional Leverage limits
@@ -216,14 +216,16 @@ class TradePair(Enum):
            TradePairCategory.INDICES]
     DJI = ["DJI", "DJI", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
            TradePairCategory.INDICES]
-    FTSE = ["FTSE", "FTSE", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
-            TradePairCategory.INDICES]
-    GDAXI = ["GDAXI", "GDAXI", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
-             TradePairCategory.INDICES]
     NDX = ["NDX", "NDX", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
            TradePairCategory.INDICES]
     VIX = ["VIX", "VIX", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
            TradePairCategory.INDICES]
+
+    # Trade pairs not available for trading due to transitioning to Polygon.io which does not cutrrently support them.
+    FTSE = ["FTSE", "FTSE", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
+            TradePairCategory.INDICES]
+    GDAXI = ["GDAXI", "GDAXI", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
+             TradePairCategory.INDICES]
 
     @property
     def trade_pair_id(self):

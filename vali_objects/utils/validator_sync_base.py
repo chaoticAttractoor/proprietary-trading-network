@@ -91,9 +91,19 @@ class ValidatorSyncBase():
 
         challenge_period_data = candidate_data.get('challengeperiod')
         if challenge_period_data:  # Only in autosync as of now.
-            self.challengeperiod_manager.challengeperiod_testing = challenge_period_data.get('testing', {})
-            self.challengeperiod_manager.challengeperiod_success = challenge_period_data.get('success', {})
-            self.challengeperiod_manager._write_challengeperiod_from_memory_to_disk()
+            self.challengeperiod_manager._refresh_challengeperiod_in_memory()
+            orig_testing_keys = set(self.challengeperiod_manager.challengeperiod_testing.keys())
+            orig_success_keys = set(self.challengeperiod_manager.challengeperiod_success.keys())
+            new_testing_keys = set(challenge_period_data.get('testing').keys())
+            new_success_keys = set(challenge_period_data.get('success').keys())
+            bt.logging.info(f"Challengeperiod testing sync keys added: {new_testing_keys-orig_testing_keys}\n"
+                            f"Challengeperiod testing sync keys removed: {orig_testing_keys - new_testing_keys}\n"
+                            f"Challengeperiod success sync keys added: {new_success_keys - orig_success_keys}\n"
+                            f"Challengeperiod success sync keys removed: {orig_success_keys - new_success_keys}")
+            if not shadow_mode:
+                self.challengeperiod_manager.challengeperiod_testing = challenge_period_data.get('testing', {})
+                self.challengeperiod_manager.challengeperiod_success = challenge_period_data.get('success', {})
+                self.challengeperiod_manager._write_challengeperiod_from_memory_to_disk()
 
         eliminated_hotkeys = set([e['hotkey'] for e in eliminations])
         # For a healthy validator, the existing positions will always be a superset of the candidate positions
@@ -291,7 +301,7 @@ class ValidatorSyncBase():
     def positions_order_aligned(self, p1, p2):
         for o1 in p1["orders"]:
             for o2 in p2["orders"]:
-                if o1["order_uuid"] == o2["order_uuid"] or self.dict_orders_aligned(o1, o2):
+                if self.dict_orders_aligned(o1, o2):
                     return True
         return False
 
@@ -305,9 +315,10 @@ class ValidatorSyncBase():
     def dict_orders_aligned(self, o1, o2, timebound_ms=None):
         if timebound_ms is None:
             timebound_ms = self.SYNC_LOOK_AROUND_MS
-        return ((o1["leverage"] == o2["leverage"]) and
-                (o1["order_type"] == o2["order_type"]) and
-                abs(o1["processed_ms"] - o2["processed_ms"]) < timebound_ms)
+        return (o1["order_uuid"] == o2["order_uuid"] or
+                ((o1["leverage"] == o2["leverage"]) and
+                 (o1["order_type"] == o2["order_type"]) and
+                 abs(o1["processed_ms"] - o2["processed_ms"]) < timebound_ms))
 
     def sync_orders(self, ep, cp, hk, trade_pair, hard_snap_cutoff_ms):
         debug = 1
