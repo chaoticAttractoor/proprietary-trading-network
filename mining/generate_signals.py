@@ -314,7 +314,10 @@ if __name__ == "__main__":
 
         # load live data
         order = None 
-        input = fetch_binance_data()
+        input =  fetch_binance_data(symbol="BTCUSDT", interval='5m', max_rows=3000)
+        if input.shape[0] < 2016:
+            print(f'warning - binance data has only returned {input.shape[0]} rows')
+
         bt.logging.info(f"Latest candle: {input['ds'].tail(1).values[0]}")
         print(f"Latest candle: {input['ds'].tail(1).values[0]}")
 
@@ -368,7 +371,7 @@ if __name__ == "__main__":
             if order != 'FLAT': 
                 print('No Open trade - running prediction ')
 
-                preds = mining_utils.multi_predict(model,input,2)
+                preds = mining_utils.single_predict(model,input)
                 modelname = str(model.models[0])
                 output = mining_utils.gen_signals_from_predictions(predictions= preds, hist = input ,modelname=modelname ) 
             #  signals = mining_utils.assess_signals(output)
