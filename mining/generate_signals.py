@@ -342,9 +342,9 @@ if __name__ == "__main__":
             lasttrade = btc.check_last_trade()
             
             if isinstance(lasttrade, pd.DataFrame) and not lasttrade.empty:
-                 print('Open trade detected. ')
-                
+
                  if pd.isna(lasttrade['trade_closed'].iloc[-1]):
+                    print('Open trade detected. ')
 
                     current_pnl = None
                     exit_long = False 
