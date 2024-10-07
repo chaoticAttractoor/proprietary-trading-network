@@ -371,7 +371,7 @@ if __name__ == "__main__":
             if order != 'FLAT': 
                 print('No Open trade - running prediction ')
 
-                preds = mining_utils.single_predict(model,input)
+                preds = mining_utils.single_predict(model,input.dropna())
                 modelname = str(model.models[0])
                 output = mining_utils.gen_signals_from_predictions(predictions= preds, hist = input ,modelname=modelname ) 
             #  signals = mining_utils.assess_signals(output)
