@@ -32,21 +32,26 @@ def multi_predict(model, input, n):
     return result_df
 
 
-
+def single_predict(model, input):
+    df = input.copy()
+    prediction = model.predict(df).reset_index()
+    # Concatenate the list and sort by date
+    return prediction 
 
 def gen_signals_from_predictions(predictions, hist,modelname): 
     
     input =  process_data_for_signals(predictions=predictions,hist=hist,modelname=modelname)
     
-    return calculate_signals(input,INDICATORS,BENCHMARKS)
+    return calculate_signals(input) #,INDICATORS,BENCHMARKS)
 
  
 def assess_signals(signals):
+    print(signals)
     
     
     results = {
-        'long_entry': signals_long_entry(df=signals,LONG_ENTRY=LONG_ENTRY),
-        'long_exit': signals_long_exit(df=signals,LONG_EXIT=LONG_EXIT),
+        'long_entry': signals_long_entry(df=signals),
+        'long_exit': signals_long_exit(df=signals),
         'short_entry': signals_short_entry(signals),
         'short_exit': signals_short_exit(signals) 
     }
