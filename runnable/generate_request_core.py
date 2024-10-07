@@ -3,6 +3,7 @@ import gzip
 import json
 import os
 import hashlib
+from typing import List
 
 from google.cloud import storage
 
@@ -136,7 +137,7 @@ def upload_checkpoint_to_gcloud(final_dict):
     blob.upload_from_string(zip_buffer)
     print(f'Uploaded {blob_name} to {bucket_name}')
 
-def generate_request_core(time_now:int) -> dict:
+def generate_request_core(time_now:int, selected_miner_hotkeys: List[str] = None) -> dict:
     position_manager = PositionManager(
         config=None,
         metagraph=None,
@@ -174,6 +175,10 @@ def generate_request_core(time_now:int) -> dict:
             f"directory for miners doesn't exist "
             f"[{ValiBkpUtils.get_miner_dir()}]. Skip run for now."
         )
+
+    # only return miner hotkeys if specified
+    if selected_miner_hotkeys is not None:
+        all_miner_hotkeys = selected_miner_hotkeys
 
     # we won't be able to query for eliminated hotkeys from challenge period
     hotkey_positions = position_manager.get_all_miner_positions_by_hotkey(
@@ -245,7 +250,7 @@ def generate_request_core(time_now:int) -> dict:
     )
 
     # unfiltered positions dict for checkpoints
-    unfiltered_positions = {'positions': copy.deepcopy(ord_dict_hotkey_position_map)}
+    unfiltered_positions = copy.deepcopy(ord_dict_hotkey_position_map)
 
     n_orders_original = 0
     for positions in hotkey_positions.values():
@@ -304,4 +309,12 @@ def generate_request_core(time_now:int) -> dict:
 
     # Max filtering
     upload_checkpoint_to_gcloud(final_dict)
-    return unfiltered_positions
+
+    checkpoint_dict = {
+        'challengeperiod': {
+            "testing": challengeperiod_testing_dictionary,
+            "success": challengeperiod_success_dictionary
+        },
+        'positions': unfiltered_positions
+    }
+    return checkpoint_dict

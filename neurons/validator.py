@@ -283,21 +283,19 @@ class Validator:
         # was placed within 24 hours.
         if self.is_mainnet:
             n_positions_on_disk = self.position_manager.get_number_of_miners_with_any_positions()
-            smallest_disk_ms, largest_disk_ms = (
+            oldest_disk_ms, youngest_disk_ms = (
                 self.position_manager.get_extreme_position_order_processed_on_disk_ms())
             if (n_positions_on_disk > 0):
                 bt.logging.info(f"Found {n_positions_on_disk} positions on disk."
-                                f" Found youngest_disk_ms: {TimeUtil.millis_to_datetime(smallest_disk_ms)},"
-                                f" oldest_disk_ms: {TimeUtil.millis_to_datetime(largest_disk_ms)}")
-            if (n_positions_on_disk == 0 or
-                    smallest_disk_ms > TimeUtil.timestamp_to_millis(TimeUtil.generate_start_timestamp(days=1)) or
-                    largest_disk_ms < TimeUtil.timestamp_to_millis(TimeUtil.generate_start_timestamp(days=1))):
-                msg = ("Validator data needs to be synced with mainnet. Please restore data from checkpoint "  # noqa: F841
-                       "before running the validator. More info here: "
+                                f" Found oldest_disk_ms: {TimeUtil.millis_to_datetime(oldest_disk_ms)},"
+                                f" oldest_disk_ms: {TimeUtil.millis_to_datetime(youngest_disk_ms)}")
+            one_day_ago = TimeUtil.timestamp_to_millis(TimeUtil.generate_start_timestamp(days=1))
+            if (n_positions_on_disk == 0 or youngest_disk_ms < one_day_ago):
+                msg = ("Validator data needs to be synced with mainnet validators. "
+                       "Restoring validator with 24 hour lagged file. More info here: "
                        "https://github.com/taoshidev/proprietary-trading-network/"
                        "blob/main/docs/regenerating_validator_state.md")
-                #bt.logging.error(msg)
-                #raise Exception(msg)
+                bt.logging.warning(msg)
                 self.position_syncer.sync_positions(
                     False, candidate_data=self.position_syncer.read_validator_checkpoint_from_gcloud_zip())
 
@@ -711,9 +709,9 @@ class Validator:
         miner_hotkey = synapse.dendrite.hotkey
         error_message = ""
         try:
-            stats = generate_miner_statistics_data(time_now=TimeUtil.now_in_millis(), checkpoints=True, miner_hotkeys=[miner_hotkey])
-            positions = self.position_manager.get_all_miner_positions(miner_hotkey, sort_positions=True)
-            dash_data = {"statistics": stats, "positions": positions}
+            stats = generate_miner_statistics_data(time_now=TimeUtil.now_in_millis(), checkpoints=True, selected_miner_hotkeys=[miner_hotkey])
+            positions = generate_request_core(time_now=TimeUtil.now_in_millis(), selected_miner_hotkeys=[miner_hotkey])
+            dash_data = {"statistics": stats, **positions}
 
             if not stats["data"]:
                 error_message = f"Validator {self.wallet.hotkey.ss58_address} has no stats for miner {miner_hotkey}"

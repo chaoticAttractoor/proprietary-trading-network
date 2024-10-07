@@ -36,9 +36,12 @@ class Miner:
         self.position_inspector_thread = threading.Thread(target=self.position_inspector.run_update_loop, daemon=True)
         self.position_inspector_thread.start()
         # Start the dashboard in its own thread
-        self.dashboard = Dashboard(self.wallet, self.metagraph, self.config, self.is_testnet)
-        self.dashboard_thread = threading.Thread(target=self.dashboard.run, daemon=True)
-        self.dashboard_thread.start()
+        try:
+            self.dashboard = Dashboard(self.wallet, self.metagraph, self.config, self.is_testnet, self.config.dashboard_port)
+            self.dashboard_thread = threading.Thread(target=self.dashboard.run, daemon=True)
+            self.dashboard_thread.start()
+        except OSError as e:
+            bt.logging.info(f"Unable to start miner dashboard with error {e}. Restart miner and specify a new port if desired.")
 
     def setup_logging_directory(self):
         if not os.path.exists(self.config.full_path):
@@ -108,6 +111,13 @@ class Miner:
         # We use a placeholder default value here (None) to check if the user has provided a value later
         parser.add_argument("--write_failed_signal_logs", type=bool, default=None,
                             help="Whether to write logs for failed signals. Default is True unless --subtensor.network is 'test'.")
+        # Add an argument to overwrite the default uvicorn dashboard server port
+        parser.add_argument(
+            '--dashboard_port',
+            type=int,
+            default=MinerConfig.DASHBOARD_PORT,
+            help='Uvicorn dashboard server port number (default: 41511)'
+        )
 
         # Parse the config (will take command-line arguments if provided)
         # To print help message, run python3 template/miner.py --help
@@ -152,7 +162,8 @@ class Miner:
                 self.metagraph_updater_thread.join()
                 self.position_inspector.stop_update_loop()
                 self.position_inspector_thread.join()
-                self.dashboard_thread.join()
+                if self.dashboard_thread is not None and self.dashboard_thread.is_alive():
+                    self.dashboard_thread.join()
                 break
             # In case of unforeseen errors, the miner will log the error and continue operations.
             except Exception:
