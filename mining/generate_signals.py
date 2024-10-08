@@ -40,7 +40,11 @@ if os.path.exists(polygon_path):
     POLYGON_API = json.loads(data)["api_key"]
 else:
     raise Exception(f"{polygon_path} not found", 404)
-  
+def round_time_to_nearest_5_minutes(dt):
+    dt = dt.replace(second=0, microsecond=0)  # Ensure we are checking minutes only
+    if dt.minute % 5 == 0:
+        return True
+    return False  
 def fetch_candle_on_nearest_five_minutes(dt):
     try:
         # Convert the datetime string to a datetime object
@@ -67,22 +71,6 @@ def fetch_candle_on_nearest_five_minutes(dt):
     except Exception as e:
         return None
 
-def round_time_to_nearest_five_minutes(dt):
-    
-    try: 
-        # Convert the datetime to seconds since epoch
-        dt = datetime.strptime(dt, '%Y-%m-%dT%H:%M:%S.%f')
-        timestamp = dt.timestamp()
-        # Number of seconds in 5 minutes
-        round_to = 5 * 60
-        # Perform the rounding
-        rounded_timestamp = round(timestamp / round_to) * round_to 
-        # Convert the timestamp back to a datetime object
-        rounded_dt = datetime.fromtimestamp(rounded_timestamp)
-
-        return rounded_dt
-    except: 
-        return None
 
 str_to_ordertype= { 
              'LONG' : OrderType.LONG, 
@@ -349,7 +337,8 @@ if __name__ == "__main__":
     while True: 
         current_time = datetime.now()
   
-        if current_time.minute % 5 == 0:
+        if round_time_to_nearest_5_minutes(current_time):
+
                 if not triggered:
                     
                     triggered = True
