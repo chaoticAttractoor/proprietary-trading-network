@@ -40,11 +40,13 @@ if os.path.exists(polygon_path):
     POLYGON_API = json.loads(data)["api_key"]
 else:
     raise Exception(f"{polygon_path} not found", 404)
+
 def round_time_to_nearest_5_minutes(dt):
     dt = dt.replace(second=0, microsecond=0)  # Ensure we are checking minutes only
     if dt.minute % 5 == 0:
         return True
     return False  
+
 def fetch_candle_on_nearest_five_minutes(dt):
     try:
         # Convert the datetime string to a datetime object
