@@ -344,148 +344,154 @@ if __name__ == "__main__":
     bt.logging.info(f"Initialised trade handler.")
     bt.logging.info(f"Beginning loop.")
     order = None 
+    triggered = False
+
     while True: 
-      current_time = datetime.now()
+        current_time = datetime.now()
   
-      if current_time.minute % 5 == 0:
-
-            
-
-        # load live data
-        order = None 
-        input =   fetch_data_polygon('X:BTCUSD', API_KEY=POLYGON_API)
-        if input.shape[0] < 1999:
-            print(f'warning - polygon data has only returned {input.shape[0]} rows')
-
-        bt.logging.info(f"Latest candle: {input['ds'].tail(1).values[0]}")
-        print(f"Latest candle: {input['ds'].tail(1).values[0]}")
-
-        bt.logging.info(f"Last Trade: {btc.check_last_trade()}")
-        print(f"Last Trade: {btc.check_last_trade()}")
-
-        price = input['close'].tail(1).values[0]
-        bt.logging.info(f'{price}')
-        print(f'{price}')
-
-        input = process_data_for_predictions(input)
-        print(f'Last update: {btc.last_update}')
-        latest_data_time = pd.to_datetime(input['ds'].tail(1).values[0])  # Ensure this is a datetime object
-        last_update_time = round_time_to_nearest_five_minutes(btc.last_update)  # Ensure this is a datetime object
-
-        # Perform the comparison if btc.last_update exists
-        if True:
-            # Proceed with the logic here
-            
-      
-
-            lasttrade = btc.check_last_trade()
-            
-            if isinstance(lasttrade, pd.DataFrame) and not lasttrade.empty:
-
-                 if pd.isna(lasttrade['trade_closed'].iloc[-1]):
-                    print('Open trade detected. ')
-
-                    current_pnl = None
-                    exit_long = False 
+        if current_time.minute % 5 == 0:
+                if not triggered:
                     
-                        
-                    current_pnl = float(price) / lasttrade['open_price'].tail(1).values[0] - 1
-                    print(f'Current PnL is : {current_pnl}')
-                        
-                    if current_pnl > TP :  
-                        exit_long = True
-                        print('Profit Target reached- exiting ')
-                        
-                    if current_pnl < SL: 
-                        exit_long = True
-                        print('Stop Loss Triggered. ')
-
-                    
-                    if (current_pnl is not None)  and (exit_long is True) :
-                        
-                        order = 'FLAT'
-                        btc.log_update()
-
-                
-            if order != 'FLAT': 
-                print('No Open trade - running prediction ')
-
-                preds = mining_utils.single_predict(model,input.dropna())
-                print(f'prediction string is {preds.shape}')
-                modelname = str(model.models[0])
-                output = mining_utils.gen_signals_from_predictions(predictions= preds, hist = input ,modelname=modelname ) 
-            #  signals = mining_utils.assess_signals(output)
-                order= mining_utils.map_signals(output)
-                print(f'order is {order}')
-                btc.log_update()
-                
-                          
-            if order != 'PASS' : 
-                print('Trade signal detected. Assessing impact.')
-
-                old_position = btc.position_open
-                    
-                btc.set_position(new_position=order,price=float(price) )
-                
-                new_position = btc.position_open 
-                
-                
-                if sum([old_position,new_position]) == 1 :  
-                    
-                    print('Order Triggered.')
-                    bt.logging.info(f"Order Triggered.")
-
-                        
-                    order_type = str_to_ordertype[btc.current_position]
-                    
-                    trade_pair = str_to_tradepair[btc.pair]       
-                    
-                    
-                    # Define the JSON data to be sent in the request
-                            
-                    data = {
-                        'trade_pair':trade_pair ,
-                        'order_type': order_type,
-                        'leverage': 0.5,
-                        'api_key':API_KEY,
-                        } 
-                    
-                    print(f"order type: {order_type}")
-                    
-            
-                    # Convert the Python dictionary to JSON format
-                    json_data = json.dumps(data, cls=CustomEncoder)
-                    print(json_data)
-                    # Set the headers to specify that the content is in JSON format
-                    headers = {
-                        'Content-Type': 'application/json',
-                    }
-
-                    # Make the POST request with JSON data
-                    response = requests.post(url, data=json_data, headers=headers)
-                    bt.logging.info(f"Order Posted")
-                    bt.logging.info(f"Status: { response.status_code }")
-
-                
-
-                    # Check if the request was successful (status code 200)
-                    if response.status_code == 200:
-                        print("POST request was successful.")
-                        print("Response:")
-                        print(response.json())  # Print the response data
-                    else:
-                        print(response.__dict__)
-                        print("POST request failed with status code:", response.status_code)
-                    
+                    triggered = True
+                    # load live data
                     order = None 
-                   # time.sleep(5)
-                
-            else: 
-                print('No Change In Position')
-                bt.logging.info(f"No Change In Position")
-                order = None 
+                    input =   fetch_data_polygon('X:BTCUSD', API_KEY=POLYGON_API)
+                    print(f'data shape if {input.shape}')
+                    if input.shape[0] < 1999:
+                        print(f'warning - polygon data has only returned {input.shape[0]} rows')
 
+                    bt.logging.info(f"Latest candle: {input['ds'].tail(1).values[0]}")
+                    print(f"Latest candle: {input['ds'].tail(1).values[0]}")
+
+                    bt.logging.info(f"Last Trade: {btc.check_last_trade()}")
+                    print(f"Last Trade: {btc.check_last_trade()}")
+
+                    price = input['close'].tail(1).values[0]
+                    bt.logging.info(f'{price}')
+                    print(f'{price}')
+
+                    input = process_data_for_predictions(input)
+                    print(f'Last update: {btc.last_update}')
+                    latest_data_time = pd.to_datetime(input['ds'].tail(1).values[0])  # Ensure this is a datetime object
+                    last_update_time = round_time_to_nearest_five_minutes(btc.last_update)  # Ensure this is a datetime object
+
+                    # Perform the comparison if btc.last_update exists
+                    if True:
+                        # Proceed with the logic here
+                        
                 
-                #time.sleep(5)
+
+                        lasttrade = btc.check_last_trade()
+                        
+                        if isinstance(lasttrade, pd.DataFrame) and not lasttrade.empty:
+
+                            if pd.isna(lasttrade['trade_closed'].iloc[-1]):
+                                print('Open trade detected. ')
+
+                                current_pnl = None
+                                exit_long = False 
+                                
+                                    
+                                current_pnl = float(price) / lasttrade['open_price'].tail(1).values[0] - 1
+                                print(f'Current PnL is : {current_pnl}')
+                                    
+                                if current_pnl > TP :  
+                                    exit_long = True
+                                    print('Profit Target reached- exiting ')
+                                    
+                                if current_pnl < SL: 
+                                    exit_long = True
+                                    print('Stop Loss Triggered. ')
+
+                                
+                                if (current_pnl is not None)  and (exit_long is True) :
+                                    
+                                    order = 'FLAT'
+                                    btc.log_update()
+
+                            
+                        if order != 'FLAT': 
+                            print('No Open trade - running prediction ')
+
+                            preds = mining_utils.single_predict(model,input.dropna())
+                            print(f'prediction string is {preds.shape}')
+                            modelname = str(model.models[0])
+                            output = mining_utils.gen_signals_from_predictions(predictions= preds, hist = input ,modelname=modelname ) 
+                        #  signals = mining_utils.assess_signals(output)
+                            order= mining_utils.map_signals(output)
+                            print(f'order is {order}')
+                            btc.log_update()
+                            
+                                    
+                        if order != 'PASS' : 
+                            print('Trade signal detected. Assessing impact.')
+
+                            old_position = btc.position_open
+                                
+                            btc.set_position(new_position=order,price=float(price) )
+                            
+                            new_position = btc.position_open 
+                            
+                            
+                            if sum([old_position,new_position]) == 1 :  
+                                
+                                print('Order Triggered.')
+                                bt.logging.info(f"Order Triggered.")
+
+                                    
+                                order_type = str_to_ordertype[btc.current_position]
+                                
+                                trade_pair = str_to_tradepair[btc.pair]       
+                                
+                                
+                                # Define the JSON data to be sent in the request
+                                        
+                                data = {
+                                    'trade_pair':trade_pair ,
+                                    'order_type': order_type,
+                                    'leverage': 0.5,
+                                    'api_key':API_KEY,
+                                    } 
+                                
+                                print(f"order type: {order_type}")
+                                
+                        
+                                # Convert the Python dictionary to JSON format
+                                json_data = json.dumps(data, cls=CustomEncoder)
+                                print(json_data)
+                                # Set the headers to specify that the content is in JSON format
+                                headers = {
+                                    'Content-Type': 'application/json',
+                                }
+
+                                # Make the POST request with JSON data
+                                response = requests.post(url, data=json_data, headers=headers)
+                                bt.logging.info(f"Order Posted")
+                                bt.logging.info(f"Status: { response.status_code }")
+
+                            
+
+                                # Check if the request was successful (status code 200)
+                                if response.status_code == 200:
+                                    print("POST request was successful.")
+                                    print("Response:")
+                                    print(response.json())  # Print the response data
+                                else:
+                                    print(response.__dict__)
+                                    print("POST request failed with status code:", response.status_code)
+                                
+                                order = None 
+                            # time.sleep(5)
+                            
+                        else: 
+                            print('No Change In Position')
+                            bt.logging.info(f"No Change In Position")
+                            order = None 
+
+                            
+                            #time.sleep(5)
+                        
+        else: 
+            triggered =False
         
     time.sleep(5)
