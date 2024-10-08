@@ -31,6 +31,31 @@ if os.path.exists(secrets_json_path):
     API_KEY = json.loads(data)["api_key"]
 else:
     raise Exception(f"{secrets_json_path} not found", 404)
+def fetch_candle_on_nearest_five_minutes(dt):
+    try:
+        # Convert the datetime string to a datetime object
+        dt = datetime.strptime(dt, '%Y-%m-%dT%H:%M:%S.%f')
+        
+        # Number of seconds in 5 minutes
+        round_to = 5 * 60
+        
+        # Convert the datetime to seconds since epoch
+        timestamp = dt.timestamp()
+        
+        # Perform rounding to the nearest 5-minute interval
+        rounded_timestamp = round(timestamp / round_to) * round_to 
+        
+        # Convert the rounded timestamp back to a datetime object
+        rounded_dt = datetime.fromtimestamp(rounded_timestamp)
+        
+        # Check if the time is exactly on a 5-minute interval
+        if rounded_dt.minute % 5 == 0:
+            return rounded_dt  # Return if it's on a 5-minute boundary
+        else:
+            return None  # Return None if it's not on a 5-minute interval
+    
+    except Exception as e:
+        return None
 
 def round_time_to_nearest_five_minutes(dt):
     
@@ -309,7 +334,11 @@ if __name__ == "__main__":
     bt.logging.info(f"Initialised trade handler.")
     bt.logging.info(f"Beginning loop.")
     order = None 
-    while True:  
+    while True: 
+      current_time = datetime.now()
+  
+      if current_time.minute % 5 == 0:
+
             
 
         # load live data
@@ -334,7 +363,7 @@ if __name__ == "__main__":
         last_update_time = round_time_to_nearest_five_minutes(btc.last_update)  # Ensure this is a datetime object
 
         # Perform the comparison if btc.last_update exists
-        if (btc.last_update is None) or ((latest_data_time - last_update_time) >= timedelta(minutes=5)):
+        if True:
             # Proceed with the logic here
             
       

@@ -81,7 +81,7 @@ if __name__ == "__main__":
     data = {
         'trade_pair':trade_pair ,
         'order_type': order_type,
-        'leverage': 1.0,
+        'leverage': 0.5,
         'api_key':API_KEY,
         } 
     
