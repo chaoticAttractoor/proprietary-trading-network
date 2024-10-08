@@ -364,7 +364,7 @@ if __name__ == "__main__":
                     input = process_data_for_predictions(input)
                     print(f'Last update: {btc.last_update}')
                     latest_data_time = pd.to_datetime(input['ds'].tail(1).values[0])  # Ensure this is a datetime object
-                    last_update_time = round_time_to_nearest_five_minutes(btc.last_update)  # Ensure this is a datetime object
+                    #last_update_time = round_time_to_nearest_five_minutes(btc.last_update)  # Ensure this is a datetime object
 
                     # Perform the comparison if btc.last_update exists
                     if True:
