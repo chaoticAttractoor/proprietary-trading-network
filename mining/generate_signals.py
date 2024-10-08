@@ -10,7 +10,7 @@ import mining_utils
 import pandas as pd
 from vali_objects.enums.order_type_enum import OrderType
 from vali_config import TradePair, TradePairCategory, ValiConfig
-from get_data import fetch_binance_data
+from get_data import fetch_data_polygon
 from datetime import datetime 
 import pickle
 import os
@@ -31,6 +31,16 @@ if os.path.exists(secrets_json_path):
     API_KEY = json.loads(data)["api_key"]
 else:
     raise Exception(f"{secrets_json_path} not found", 404)
+
+polygon_path= ValiConfig.BASE_DIR + "/mining/polygon_api_secrets.json"
+# Define your API key
+if os.path.exists(polygon_path):
+    with open(polygon_path, "r") as file:
+        data = file.read()
+    POLYGON_API = json.loads(data)["api_key"]
+else:
+    raise Exception(f"{polygon_path} not found", 404)
+  
 def fetch_candle_on_nearest_five_minutes(dt):
     try:
         # Convert the datetime string to a datetime object
@@ -343,9 +353,9 @@ if __name__ == "__main__":
 
         # load live data
         order = None 
-        input =  fetch_binance_data(symbol="BTCUSDT", interval='5m', max_rows=3000)
-        if input.shape[0] < 2016:
-            print(f'warning - binance data has only returned {input.shape[0]} rows')
+        input =   fetch_data_polygon('X:BTCUSD', API_KEY=POLYGON_API)
+        if input.shape[0] < 1999:
+            print(f'warning - polygon data has only returned {input.shape[0]} rows')
 
         bt.logging.info(f"Latest candle: {input['ds'].tail(1).values[0]}")
         print(f"Latest candle: {input['ds'].tail(1).values[0]}")
@@ -468,7 +478,7 @@ if __name__ == "__main__":
                         print("POST request failed with status code:", response.status_code)
                     
                     order = None 
-                    time.sleep(60)
+                   # time.sleep(5)
                 
             else: 
                 print('No Change In Position')
@@ -476,6 +486,6 @@ if __name__ == "__main__":
                 order = None 
 
                 
-                time.sleep(60)
+                #time.sleep(5)
         
-        time.sleep(60)
+    time.sleep(5)
