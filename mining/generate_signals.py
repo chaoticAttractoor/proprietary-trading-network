@@ -348,7 +348,7 @@ if __name__ == "__main__":
         current_time = datetime.now()
         
   
-        nearest_5_minute = round_time_to_nearest_5_minutes(current_time)
+        nearest_5_minute = round_time_down_to_nearest_5_minutes(current_time)
         
         
         if last_logged_time != nearest_5_minute and is_within_1_minute_of_5_minute_mark(current_time):
