@@ -349,12 +349,16 @@ if __name__ == "__main__":
 
     while True: 
         current_time = datetime.now()
+        
   
         nearest_5_minute = round_time_to_nearest_5_minutes(current_time)
+        
+        print(f'current time: {current_time} and nearest 5 munutes : { nearest_5_minute}')
         
         if last_logged_time != nearest_5_minute and is_within_1_minute_of_5_minute_mark(current_time):
             
                     last_logged_time = nearest_5_minute
+                    print(f'last logged time is : {last_logged_time}')
                     # load live data
                     order = None 
                     input =   fetch_data_polygon('X:BTCUSD', API_KEY=POLYGON_API)
