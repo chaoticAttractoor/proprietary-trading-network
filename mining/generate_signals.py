@@ -353,6 +353,8 @@ if __name__ == "__main__":
         
         if last_logged_time != nearest_5_minute and is_within_1_minute_of_5_minute_mark(current_time):
                     print(f'current time: {current_time} and nearest 5 munutes : { nearest_5_minute}')
+                    
+                    time.sleep(62)
 
                     last_logged_time = nearest_5_minute
                     print(f'last logged time is : {last_logged_time}')

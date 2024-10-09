@@ -18,7 +18,7 @@ def fetch_data_polygon(symbol, API_KEY):
 
     # Calculate the end date rounded to the nearest 5-minute increment
     now = datetime.now()
-    end_date = round_time_to_nearest_5_minutes(now)
+    end_date =  now #round_time_to_nearest_5_minutes(now)
 
     # Calculate the start date 7 days before the rounded end date
     start_date = end_date - timedelta(days=7)
