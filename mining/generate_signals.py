@@ -42,10 +42,19 @@ else:
     raise Exception(f"{polygon_path} not found", 404)
 
 def round_time_to_nearest_5_minutes(dt):
-    dt = dt.replace(second=0, microsecond=0)  # Ensure we are checking minutes only
-    if dt.minute % 5 == 0:
-        return True
-    return False  
+    discard = timedelta(minutes=dt.minute % 5,
+                        seconds=dt.second,
+                        microseconds=dt.microsecond)
+    dt -= discard
+    if discard >= timedelta(minutes=2.5):
+        dt += timedelta(minutes=5)
+    return dt
+
+# Function to check if the time is within 1 minute of a 5-minute boundary
+def is_within_1_minute_of_5_minute_mark(current_time):
+    nearest_5_minute = round_time_to_nearest_5_minutes(current_time)
+    difference = abs(current_time - nearest_5_minute)
+    return difference <= timedelta(minutes=1)
 
 def fetch_candle_on_nearest_five_minutes(dt):
     try:
@@ -329,21 +338,23 @@ if __name__ == "__main__":
     url = f'{base_url}/api/receive-signal'
     
     last = None
-    
+    last_logged_time = None
+
     btc =  TradeHandler(pair='btcusd')
     bt.logging.info(f"Initialised trade handler.")
     bt.logging.info(f"Beginning loop.")
     order = None 
     triggered = False
+    last_triggered_minute = None
 
     while True: 
         current_time = datetime.now()
   
-        if round_time_to_nearest_5_minutes(current_time):
-
-                if not triggered:
-                    
-                    triggered = True
+        nearest_5_minute = round_time_to_nearest_5_minutes(current_time)
+        
+        if last_logged_time != nearest_5_minute and is_within_1_minute_of_5_minute_mark(current_time):
+            
+                    last_logged_time = nearest_5_minute
                     # load live data
                     order = None 
                     input =   fetch_data_polygon('X:BTCUSD', API_KEY=POLYGON_API)
@@ -482,7 +493,6 @@ if __name__ == "__main__":
                             
                             #time.sleep(5)
                         
-        else: 
-            triggered =False
+
         
     time.sleep(5)
