@@ -41,18 +41,15 @@ if os.path.exists(polygon_path):
 else:
     raise Exception(f"{polygon_path} not found", 404)
 
-def round_time_to_nearest_5_minutes(dt):
+def round_time_down_to_nearest_5_minutes(dt):
     discard = timedelta(minutes=dt.minute % 5,
                         seconds=dt.second,
                         microseconds=dt.microsecond)
-    dt -= discard
-    if discard >= timedelta(minutes=2.5):
-        dt += timedelta(minutes=5)
-    return dt
+    return dt - discard
 
-# Function to check if the time is within 1 minute of a 5-minute boundary
+# Function to check if the time is within 1 minute of a 5-minute boundary (rounding down only)
 def is_within_1_minute_of_5_minute_mark(current_time):
-    nearest_5_minute = round_time_to_nearest_5_minutes(current_time)
+    nearest_5_minute = round_time_down_to_nearest_5_minutes(current_time)
     difference = abs(current_time - nearest_5_minute)
     return difference <= timedelta(minutes=1)
 
