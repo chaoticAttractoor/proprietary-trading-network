@@ -14,13 +14,21 @@ from get_data import fetch_data_polygon
 from datetime import datetime 
 import pickle
 import os
-from signals import process_data_for_predictions,LONG_ENTRY
+#from signals import process_data_for_predictions,LONG_ENTRY
 import bittensor as bt
 import duckdb
 import numpy as np
 from datetime import timedelta 
+import strat_handler
+from mining.config import model_path 
 
-model = mining_utils.load_model()
+
+strategy_handler = StrategyHandler(
+   model_path=model_path ,
+    #strategy_function=rsi_based_strategy,
+   # data_processing_function=rsi_data_processing
+)
+#model = mining_utils.load_model()
 TP = 0.005 
 SL = -0.05
 secrets_json_path = ValiConfig.BASE_DIR + "/mining/miner_secrets.json"
@@ -375,7 +383,7 @@ if __name__ == "__main__":
                     bt.logging.info(f'{price}')
                     print(f'{price}')
 
-                    input = process_data_for_predictions(input)
+                    input = strategy_handler.process_data_for_predictions(input)
                     print(f'Last update: {btc.last_update}')
                     latest_data_time = pd.to_datetime(input['ds'].tail(1).values[0])  # Ensure this is a datetime object
                     #last_update_time = round_time_to_nearest_five_minutes(btc.last_update)  # Ensure this is a datetime object
@@ -418,12 +426,14 @@ if __name__ == "__main__":
                         if order != 'FLAT': 
                             print('No Open trade - running prediction ')
 
-                            preds = mining_utils.single_predict(model,input.dropna())
+                            preds = strategy_handler.single_predict(input.dropna())
                             print(f'prediction string is {preds.shape}')
                             modelname = str(model.models[0])
-                            output = mining_utils.gen_signals_from_predictions(predictions= preds, hist = input ,modelname=modelname ) 
-                        #  signals = mining_utils.assess_signals(output)
-                            order= mining_utils.map_signals(output)
+                            
+                            signals = strategy_handler.process_data_for_signals(predictions= preds, hist = input ,modelname=modelname ) 
+                            processed_signals = strategy_handler.calculate_signals(signals)
+                            order= strategy_handler.map_signals(processed_signals)
+
                             print(f'order is {order}')
                             btc.log_update()
                             
