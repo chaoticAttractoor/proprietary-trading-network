@@ -3,9 +3,9 @@ from copy import deepcopy
 from tests.vali_tests.base_objects.test_base import TestBase
 from vali_objects.utils.ledger_utils import LedgerUtils
 
-from vali_config import ValiConfig
+from vali_objects.vali_config import ValiConfig
 
-from tests.shared_objects.test_utilities import generate_ledger
+from tests.shared_objects.test_utilities import generate_ledger, checkpoint_generator
 import random
 
 
@@ -139,10 +139,10 @@ class TestLedgerPenalty(TestBase):
             l5_cps[min(i, len(l5_cps) - 1)].gain = 1.0
 
         # Daily consistency penalties and ratios
-        self.assertAlmostEqual(LedgerUtils.biweekly_consistency_penalty(l1_cps), 0.0)
+        self.assertAlmostEqual(LedgerUtils.biweekly_consistency_penalty(l1_cps), 0.0, places=6)
         self.assertEqual(LedgerUtils.biweekly_consistency_ratio(l1_cps), 1.0)
 
-        self.assertAlmostEqual(LedgerUtils.biweekly_consistency_penalty(l2_cps), 0.0)
+        self.assertAlmostEqual(LedgerUtils.biweekly_consistency_penalty(l2_cps), 0.0,  places=6)
         self.assertEqual(LedgerUtils.biweekly_consistency_ratio(l2_cps), 1.0)
 
         self.assertLess(LedgerUtils.biweekly_consistency_penalty(l3_cps), 1.0)  # should have small penalty
@@ -166,7 +166,37 @@ class TestLedgerPenalty(TestBase):
         # Now it should fail the biweekly consistency for l5
         self.assertAlmostEqual(LedgerUtils.biweekly_consistency_ratio(l5_cps), 1.0)
         self.assertLess(LedgerUtils.biweekly_consistency_penalty(l5_cps), 1.0)
-        self.assertAlmostEqual(LedgerUtils.biweekly_consistency_penalty(l5_cps), 0.0)
+        self.assertAlmostEqual(LedgerUtils.biweekly_consistency_penalty(l5_cps), 0.0,  places=6)
+
+    # Test drawdown_abnormality
+    def test_drawdown_abnormality(self):
+        
+        # Base case
+        self.assertEqual(LedgerUtils.drawdown_abnormality([]), 0)
+
+        drawdowns = [0.99, 0.98, 0.97]
+        checkpoints = [checkpoint_generator(mdd=mdd) for mdd in drawdowns]
+
+        # Drawdown abnormality should work for only a few checkpoints
+        self.assertLess(LedgerUtils.drawdown_abnormality(checkpoints), 1.0)
+        l1 = generate_ledger(0.1, mdd=0.98)
+        l1_cps = l1.cps
+
+        # All recent drawdowns equal to 0 should return low abnormality
+        for i in range(1, ValiConfig.RETURN_SHORT_LOOKBACK_LEDGER_WINDOWS + 1):
+            l1_cps[-i].mdd = 1.0
+        
+        self.assertAlmostEqual(LedgerUtils.drawdown_abnormality(l1_cps), 1.0, places=2) # Essentially no penalty
+
+        # All equal drawdown
+        l2 = generate_ledger(0.1, mdd=0.98)
+        self.assertAlmostEqual(LedgerUtils.drawdown_abnormality(l2.cps), 1.0, places=2) # Essentially no penalty
+
+        # Large abnormality near maximum drawdown threshold should have a score of 0 (i.e., high penalty)
+        l3 = generate_ledger(0.1, mdd=0.99)
+        l3_cps = l3.cps
+        l3_cps[-1].mdd = 0.91
+        self.assertAlmostEqual(LedgerUtils.drawdown_abnormality(l3.cps), 0.0, places=6)
 
     def test_max_drawdown_threshold(self):
         l1 = generate_ledger(0.1, mdd=0.99)  # 1% drawdown

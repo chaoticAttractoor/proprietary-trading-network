@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from tests.shared_objects.mock_classes import MockMetagraph
 from tests.vali_tests.base_objects.test_base import TestBase
 from time_util.time_util import TimeUtil, MS_IN_24_HOURS, MS_IN_8_HOURS
-from vali_config import TradePair
+from vali_objects.vali_config import TradePair
 from vali_objects.enums.order_type_enum import OrderType
 from vali_objects.position import Position, FEE_V6_TIME_MS
 from vali_objects.utils.live_price_fetcher import LivePriceFetcher
@@ -18,7 +18,6 @@ class TestTimeUtil(TestBase):
     def setUp(self):
         super().setUp()
         secrets = ValiUtils.get_secrets(running_unit_tests=True)
-        secrets["twelvedata_apikey"] = secrets["twelvedata_apikey"]
         self.live_price_fetcher = LivePriceFetcher(secrets=secrets, disable_ws=True)
         self.DEFAULT_MINER_HOTKEY = "test_miner"
         self.DEFAULT_POSITION_UUID = "test_position"
@@ -85,6 +84,32 @@ class TestTimeUtil(TestBase):
         position.rebuild_position_with_updated_orders()
         n_intervals, time_until_next_interval_ms = TimeUtil.n_intervals_elapsed_crypto(position.start_carry_fee_accrual_ms, t_ms)
         assert n_intervals == 0, f"n_intervals: {n_intervals}, time_until_next_interval_ms: {time_until_next_interval_ms}"
+
+    def test_parse_iso_to_ms(self):
+        test_cases = [
+            # Timestamp with milliseconds and UTC offset
+            {"iso": "2024-11-20T15:47:40.062000+00:00", "expected": 1732117660062},
+
+            # Timestamp with no milliseconds
+            {"iso": "2023-03-01T12:00:00+00:00", "expected": 1677672000000},
+
+            # Timestamp with positive timezone offset
+            {"iso": "2023-03-01T15:00:00+03:00", "expected": 1677672000000},
+
+            # Timestamp with negative timezone offset
+            {"iso": "2023-03-01T06:00:00-06:00", "expected": 1677672000000},
+
+            # Timestamp with microseconds
+            {"iso": "2023-03-01T12:00:00.123456+00:00", "expected": 1677672000123},
+
+            # Timestamp with ns precision
+            {"iso": "2023-03-01T12:00:00.123456789+00:00", "expected": 1677672000123},
+        ]
+
+        for case in test_cases:
+            with self.subTest(iso=case["iso"]):
+                ms = TimeUtil.parse_iso_to_ms(case["iso"])
+                self.assertEqual(ms, case["expected"], msg=f"Expected {case['expected']} but got {ms}")
 
     def test_n_forex_intervals(self):
         prev_delta = None

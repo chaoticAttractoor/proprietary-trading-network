@@ -10,53 +10,88 @@ A long position is a bet that the trade pair will increase, while a short positi
 1. Your miner will start in the challenge period upon entry. This 60-day period will require your miner to demonstrate consistent performance, after which they will be released from the challenge period, which may happen before 60 days has expired. In this month, they will receive a small amount of TAO that will help them avoid getting deregistered. The minimum requirements to pass the challenge period:
    - 2% Total Return
    - 5% Max Drawdown 
-   - No single day’s change in portfolio value should exceed 20% of your total 60-day return.   
-   - A single position should not account for more than 25% of your total return.
+   - No single day’s change in portfolio value should exceed 40% of your total 60-day return.   
+   - A single position should not account for more than 35% of your total return.
 2. Miner will be penalized if they are not providing consistent predictions to the system or if their drawdown is too high. The details of this may be found [here](https://github.com/taoshidev/proprietary-trading-network/blob/main/vali_objects/utils/position_utils.py).
-3. A miner can have a maximum of 200 positions open.
+3. A miner can have a maximum of 1 open position per trade pair. No limit on the number of closed positions.
 4. A miner's order will be ignored if placing a trade outside of market hours.
 5. A miner's order will be ignored if they are rate limited (maliciously sending too many requests)
 6. There is a 10-second cooldown period between orders, during which the miner cannot place another order.
 
 ## Scoring Details
 
-The primary scoring mechanic in our system is *Risk Adjusted Returns*. We look at all of your positions in the prior lookback period, 90 days, and evaluate the returns from these positions. Notably, to determine the return of a miner, we look at the returns from closed positions and from open positions in loss. In filtering for open positions, we will also filter against any positions which have been open for more than 90 days. If they are in loss and still open, they will count against your score. We do this to avoid the scenario where a losing position is never closed, and the miner is able to avoid the penalty associated with this loss.
+*Risk-Adjusted Returns* is a heavily weighted scoring mechanism in our system. We calculate this metric using a combination of average daily returns and a drawdown term, assessed over different lookback periods. This approach allows us to measure each miner’s returns while factoring in the level of risk undertaken to achieve those returns. 
 
-While our primary scoring mechanic is returns, consistency plays a substantial role in scoring our miners as we look to prioritize miners with a consistent track record of success. Additionally, we have a layer of costs and penalties baked into PTN, to simulate the real costs of trading.
+While returns is a significant scoring mechanic, consistency and statistical confidence each play a substantial role in scoring our miners as we look to prioritize miners with a consistent track record of success. Additionally, we have a layer of costs and penalties baked into PTN, to simulate the real costs of trading.
 
-There are two primary systems which live in parallel to give us a stronger perspective on the quality of our miners: _Positions_ and _Portfolio Value_.
+We calculate daily returns for all positions and the entire portfolio, spanning from 12:00 AM UTC to 12:00 AM UTC the following day. However, if a trading day is still ongoing, we still monitor real-time performance and risks. 
+
+This daily calculation and evaluation framework closely aligns with real-world financial practices, enabling accurate, consistent, and meaningful performance measurement and comparison across strategies. This remains effective even for strategies trading different asset classes at different trading frequencies. This approach can also enhance the precision of volatility measurement for strategies.
+
+Annualization is used for the Sharpe ratio, Sortino ratio, and risk adjusted return with either volatility or returns being annualized to better evaluate the long-term value of strategies and standardize our metrics. Volatility is the standard deviation of returns and is a key factor in the Sharpe and Sortino calculations.
+
+Additionally, normalization with annual risk-free rate of T-bills further standardizes our metrics and allows us to measure miner performance on a more consistent basis.
+
 
 ### Scoring Metrics
 
-We use four scoring metrics to evaluate miners based on their mid trade scores: **Short Term Risk Adjusted Returns**, **Long Term Risk Adjusted Returns**, **Sharpe** and **Omega**.
+We use six scoring metrics to evaluate miners based on daily returns:  **Long Term Risk Adjusted Returns**,  **Short Term Risk Adjusted Returns**, **Sharpe**, **Omega**, **Sortino**, and **Statistical Confidence**.
 
-We measure miner risk as their maximum portfolio drawdown, the largest drop in value seen while we have been tracking the behavior of the miner. We use a blend of recently seen max drawdown values and historically likely values to make this determination, with the most recent values having the most weight. Details on this mechanic may be found in [our proposal 9](https://docs.taoshi.io/tips/p9/).
+The miner risk used in the risk adjusted returns is the miner’s average portfolio drawdown, the average of the maximum drops in value seen while we have been tracking the behavior of the miner. Once the drawdown surpasses 5%, it is no longer used directly as the denominator; instead, it is multiplied by a larger factor to amplify its effect. This emphasizes that a miner in the range between 5% and 10% average drawdown is riskier than a miner below 5% average drawdown.
 
-To find the risk adjusted return, we take the product of all positional returns as the current miner return. We then divide this by the drawdown term. If, for example, a miner has a total 90-day return of 7.5% and a drawdown of 2.5%, their long term risk adjusted return would be 3.0.
+To find the risk adjusted return, we take the annualized daily returns as the current miner return. We then divide this by the drawdown term. If, for example, a miner has a total 90-day return of 7.5% and a mean drawdown of 2.5%, their long term risk adjusted return would be 3.0.
 
-_Short term returns_ look at positions opened in the prior 90 days, but closed in the last 5 days. Like the long term returns, these use losing positions to calculate the return.
+_Long term returns_ will look at daily returns in the prior 90 days and is normalized by the drawdown term.
 
-The _sharpe ratio_ will look at the positional return divided by the standard deviation of the returns. To avoid gaming on the bottom, a minimum value of 0.5% is used for the standard deviation.
+$$
+\text{Return / Drawdown} = \frac{(\frac{365}{n}\sum_{i=0}^n{R_i}) - R_{rf}}{\sum_i^{n}{\text{MDD}_i} / n}
+$$
 
-The _omega ratio_ is a measure of the winning trades versus the losing trades. It serves as a useful proxy for the risk to reward ratio the miner is willing to take with each trade. Like the sharpe ratio, we will use a minimum value of 0.5% for the denominator.
+_Short term returns_ will look at daily returns in the prior 7 days. Besides the shorter lookback window, this calculation is the same as long term returns. 
 
-| Metric                     | Scoring Weight |
-|----------------------------|----------------|
-| Long Term Realized Returns | 100%           |
-| Short Term Realized Returns| 25%            |
-| Sharpe Ratio               | 25%            |
-| Omega Ratio                | 25%            |
+The _sharpe ratio_ will look at the annualized excess return, returns normalized with the risk-free rate, divided by the annualized volatility which is the standard deviation of the returns. To avoid gaming on the bottom, a minimum value of 1% is used for the volatility.
+
+$$
+\text{Sharpe} = \frac{(\frac{365}{n}\sum_{i=0}^n{R_i}) - R_{rf}}{\sqrt{\text{var}{(R) * \frac{365}{n}}}}
+$$
+
+The _omega ratio_ is a measure of the winning days versus the losing days. The numerator is the sum of the positive daily log returns while the denominator is the product of the negative daily log returns. It serves as a useful proxy for the risk to reward ratio the miner is willing to take with each day. Like the Sharpe ratio, we will use a minimum value of 1% for the denominator.
+
+$$
+\text{Omega} = \frac{\sum_{i=1}^n \max(r_i, 0)}{\lvert \sum_{i=1}^n \min(r_i, 0) \rvert}
+$$
+
+The _sortino ratio_ is similar to the Sharpe ratio except that the denominator, the annualized volatility, is calculated using only negative daily returns (i.e., losing days). 
+
+$$
+\text{Sortino} = \frac{(\frac{365}{n}\sum_{i=0}^n{R_i}) - R_{rf}}{\sqrt{\frac{365}{n} \cdot \text{var}(R_i \;|\; R_i < 0)}}
+$$
+
+_Statistical Confidence_ uses a t-statistic to measure how similar the daily distribution of returns is to a normal distribution with zero mean. Low similarity means higher confidence that a miner’s strategy is statistically different from a random distribution.
+
+$$
+t = \frac{\bar{R} - \mu}{s / \sqrt{n}}
+$$
+
+| Metric                     | Scoring Weight                 |
+|---------------------------------------|-----------------------|
+| Long Term Risk Adjusted Returns | 20%           |
+| Short Term Realized Returns| 10%                   |
+| Sharpe Ratio                         | 17.5%                   |
+| Omega Ratio                         | 17.5%                   |
+| Sortino Ratio 		 | 17.5%
+| Statistical Confidence	 | 17.5%	                 |
 
 ### Scoring Penalties
 
-There are four primary penalties in place for each miner:
+There are two primary penalties in place for each miner:
 
-1. **Max Positional Return**: A single position should not represent more than 15% of total realized return.
-2. **Realized Return Distribution**: No more than 30% of the miner's realized returns should be from positions all closed in a single week.
-3. **Max Portfolio Value Change - Daily**: A single day of trading should not represent more than 20% of the total unrealized return.
-4. **Max Portfolio Value Change - Biweekly**: A single two-week period should not account for more than 35% of total unrealized return.
+1. Max Drawdown: PTN penalizes miners whose maximum drawdown over the past 5 days exceeds the predefined 10% limit.
 
-Portfolio value is tracked in realtime against positions, regardless of if they are closed or open. If the measured volatility on the portfolio value is too high relative to the total returns from the miner, we will flag them as inconsistent, even if their closed positions meet the requirements. This is meant to protect from the scenario where most of a miner's value comes from a single interval, but their positions may close over a longer period. Full details on the logic associated with each proposal may be found in [proposal 9](https://docs.taoshi.io/tips/p9/).
+2. Abnormal Drawdown: PTN evaluates the abnormality of recent trading performance in real time by comparing the maximum drawdown over the past 5 days to a baseline drawdown. This indicates how unusual the recent performance is. The baseline is defined as the 75th percentile of past drawdown percentages. It represents a significant drawdown level without being overly influenced by extreme cases. This approach provides a representative drawdown for comparison, making it useful for detecting abnormal performance and assessing the associated risks of a strategy in real time. 
+
+The Max Drawdown penalty and Abnormal Drawdown penalty help us detect the absolute and relative risks of a miner's trading strategy in real time.
+
 
 ### Fees and Transaction Costs
 We want to simulate real costs of trading for our miners, to make signals from PTN more valuable outside our platform. To do this, we have incorporated two primary costs: **Transaction Fees** and **Cost of Carry**. 
@@ -66,37 +101,37 @@ Transaction fees are proportional to the leverage used. The higher the leverage,
 Cost of carry is reflective of real exchanges, and how they manage the cost of holding a position overnight. This rate changes depending on the asset class, the logic of which may be found in [our proposal 4](https://docs.taoshi.io/tips/p4/).
 
 ##### Implementation Details
-| Market  | Fee Period     | Times                   | Rates Applied       | Triple Wednesday |
-|---------|----------------|-------------------------|---------------------|------------------|
-| Forex   | 24h            | 21:00 UTC               | Mon-Fri             | ✓                |
-| Crypto  | 8h             | 04:00, 12:00, 20:00 UTC | Daily (Mon-Sun)     |                  |
-| Indices | 24h            | 21:00 UTC               | Mon-Fri             | ✓                |
+| Market   | Fee Period     | Times                   | Rates Applied       | Triple Wednesday |
+|----------|----------------|-------------------------|---------------------|------------------|
+| Forex    | 24h            | 21:00 UTC               | Mon-Fri             | ✓                |
+| Crypto   | 8h             | 04:00, 12:00, 20:00 UTC | Daily (Mon-Sun)     |                  |
+| Equities | 24h            | 21:00 UTC               | Mon-Fri             | ✓                |
 
 The magnitude of the fees will reflect the following distribution:
 
-| Market  | Base Rate (Annual) | Daily Rate Calculation     |
-|---------|--------------------|----------------------------|
-| Forex   | 3%                 | 0.008% * Max Seen Leverage |
-| Crypto  | 10.95%             | 0.03% * Max Seen Leverage  |
-| Indices | 5.25%              | 0.014% * Max Seen Leverage |
+| Market   | Base Rate (Annual) | Daily Rate Calculation     |
+|----------|--------------------|----------------------------|
+| Forex    | 3%                 | 0.008% * Max Seen Leverage |
+| Crypto   | 10.95%             | 0.03% * Max Seen Leverage  |
+| Equities | 5.25%              | 0.014% * Max Seen Leverage |
 
 ### Leverage Limits
 We also set limits on leverage usage, to ensure that the network has a level of risk protection and mitigation of naive strategies. The [positional leverage limits](https://docs.taoshi.io/tips/p5/) are as follows:
 
-| Market  | Leverage Limit |
-|---------|----------------|
-| Forex   | 0.1x - 5x      |
-| Crypto  | 0.01x - 0.5x   |
-| Indices | 0.1x - 5x      |
+| Market   | Leverage Limit |
+|----------|----------------|
+| Forex    | 0.1x - 5x      |
+| Crypto   | 0.01x - 0.5x   |
+| Equities | 0.1x - 5x      |
 
-We also implement a [portfolio level leverage limit](https://docs.taoshi.io/tips/p10/), which is the sum of all the leverages from each open position. This limit is set at 10x a "typical" position, where a typical position would be 1x leverage for forex/indices and 0.1x leverage for crypto. You can therefore open 10 forex positions at 1x leverage each, 5 forex positions at 2x leverage each, 5 forex positions at 1x and 5 crypto positions at 0.1x, etc.
+We also implement a [portfolio level leverage limit](https://docs.taoshi.io/tips/p10/), which is the sum of all the leverages from each open position. This limit is set at 10x a "typical" position, where a typical position would be 1x leverage for forex, 2x for equities, and 0.1x leverage for crypto. You can therefore open 10 forex positions at 1x leverage each, 5 equities positions at 2x leverage each, 5 forex positions at 2x leverage each, 5 forex positions at 1x and 5 crypto positions at 0.1x, etc.
 
 ## Incentive Distribution
 The miners are scored in each of the categories above based on their prior positions over the lookback period. Penalties are then applied to these scores, and the miners are ranked based on their total score. Percentiles are determined for each category, with the miner's overall score being reduced by the full scoring weight if they are the worst in a category.
 
 For example, if a miner is last place in the long term realized returns category, they will receive a 0% score for this category. This will effectively reduce their score to 0, and they will be prioritized during the next round of deregistration.
 
-We distribute on an exponential decay, with the top 40% of miners receiving 90% of emissions.
+We distribute using a [softmax function](https://docs.taoshi.io/tips/p11/), with a target of the top 40% of miners receiving 90% of emissions. The softmax function dynamically adjusts to the scores of miners, distributing more incentive to relatively high-performing miners.
 
 # Mining Infrastructure
 
@@ -287,10 +322,14 @@ wallet   miner    196    True   0.00000  0.00000  0.00000    0.00000    0.00000 
 Run the subnet miner:
 
 ```bash
-python neurons/miner.py --netuid 8  --wallet.name <wallet> --wallet.hotkey <miner> --logging.debug
+python neurons/miner.py --netuid 8  --wallet.name <wallet> --wallet.hotkey <miner> --start-dashboard
 ```
 
 To run your miner on the testnet add the `--subtensor.network test` flag and override the netuuid flag to `--netuid 116`.
+
+To enable debug logging, add the `--logging.debug` flag
+
+To enable the local miner dashboard to view your stats and positions/orders, add the `--start-dashboard` flag.
 
 You will see the below terminal output:
 
@@ -314,9 +353,54 @@ python neurons/miner.py --netuid 116 --subtensor.network test --wallet.name <wal
 
 # Miner Dashboard
 
-Each miner also fetches and displays its own positions and stats through a dashboard which can be set up [here](https://github.com/taoshidev/miner-dashboard).
+## Prerequisites
 
-The miner starts a local server on port `41511` by default, which can be specified using the `--dashboard_port` flag.
+- A package manager like npm, yarn, or pnpm
+
+## Running the Dashboard
+
+Each miner now comes equipped with a dashboard that will allow you to view the miner's stats and positions/orders.
+In order to enable the dashboard, add the `--start-dashboard` flag when you run your miner.
+This will install the necessary dependencies and start the app on http://localhost:5173/ by default.
+Open your browser and navigate to this URL to view your miner dashboard.
+
+## Important Note
+
+The miner will only have data if validators have already picked up its orders.
+A brand new miner may not have any data until after submitting an order.
+
+The miner dashboard queries and awaits responses from a validator. Please allow the dashboard some time to load on startup and refresh.
+
+## If you would like to view your miner dashboard on a different machine than your miner:
+
+In order to view the miner dashboard on a different machine from your miner, we recommend opening a ssh tunnel to the
+default ports `41511` and `5173`. If you are running multiple miners on one machine or those ports are busy, you can view
+the miner startup logs to confirm which ports to use.
+
+![Imgur](https://i.imgur.com/9j7bjMR.png)
+
+`41511` is used by the backend miner data API.
+
+![Imgur](https://i.imgur.com/FnBbScu.png)
+
+`5173` is used by the dashboard frontend. This is what you will be connecting to on your local machine.
+
+To create an ssh tunnel:
+
+```bash
+ssh -L [local_port_1]:localhost:[remote_port_1] -L [local_port_2]:localhost:[remote_port_2] [miner]@[address]
+```
+ex:
+```bash
+ssh -L 41511:localhost:41511 -L 5173:localhost:5173 taoshi-miner@123.45.67.89
+```
+As an example if you are using a Google Cloud VM to run your miner:
+```bash
+gcloud compute ssh miner1@test-miner1 --zone "[zone]" --project "[project]" -- -L 5173:localhost:5173 -L 41511:localhost:41511
+```
+
+This will map port `41511` and `5173` on your local machine to the same ports on the miner, allowing you to view your miner's
+dashboard at http://localhost:5173/ on your local machine.
 
 # Issues?
 

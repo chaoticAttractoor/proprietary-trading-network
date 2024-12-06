@@ -28,7 +28,7 @@ from shared_objects.rate_limiter import RateLimiter
 from vali_objects.utils.timestamp_manager import TimestampManager
 from vali_objects.uuid_tracker import UUIDTracker
 from time_util.time_util import TimeUtil
-from vali_config import TradePair
+from vali_objects.vali_config import TradePair
 from vali_objects.exceptions.signal_exception import SignalException
 from shared_objects.metagraph_updater import MetagraphUpdater
 from vali_objects.utils.elimination_manager import EliminationManager
@@ -43,7 +43,9 @@ from vali_objects.vali_dataclasses.order import Order
 from vali_objects.position import Position
 from vali_objects.enums.order_type_enum import OrderType
 from vali_objects.utils.vali_utils import ValiUtils
-from vali_config import ValiConfig
+from vali_objects.vali_config import ValiConfig
+
+from vali_objects.utils.plagiarism_detector import PlagiarismDetector
 
 # Global flag used to indicate shutdown
 shutdown_dict = {}
@@ -270,7 +272,11 @@ class Validator:
         # Since the mainloop is run synchronously, we just need to lock eliminations when writing to them and when
         # reading outside of the mainloop (validator).
         self.eliminations_lock = threading.Lock()
-        # self.plagiarism_detector = PlagiarismDetector(self.config, self.metagraph)
+        self.plagiarism_detector = PlagiarismDetector(self.config, self.metagraph, shutdown_dict=shutdown_dict)
+        # Start the plagiarism detector in its own thread
+        self.plagiarism_thread = threading.Thread(target=self.plagiarism_detector.run_update_loop, daemon=True)
+        self.plagiarism_thread.start()
+
         self.mdd_checker = MDDChecker(self.config, self.metagraph, self.position_manager, self.eliminations_lock,
                                       live_price_fetcher=self.live_price_fetcher, shutdown_dict=shutdown_dict)
         self.weight_setter = SubtensorWeightSetter(self.config, self.wallet, self.metagraph)
@@ -383,6 +389,8 @@ class Validator:
         self.live_price_fetcher.stop_all_threads()
         bt.logging.warning("Stopping perf ledger...")
         self.perf_ledger_updater_thread.join()
+        bt.logging.warning("Stopping plagiarism detector...")
+        self.plagiarism_thread.join()
         signal.alarm(0)
         print("Graceful shutdown completed")
         sys.exit(0)
@@ -632,14 +640,14 @@ class Validator:
                 if synapse.error_message:
                     return synapse
                 # gather open positions and see which trade pairs have an open position
-                trade_pair_to_open_position = {position.trade_pair: position for position in
-                                               self.position_manager.get_all_miner_positions(miner_hotkey,
-                                                                                             only_open_positions=True)}
+                positions = self.position_manager.get_all_miner_positions(miner_hotkey, only_open_positions=True)
+                trade_pair_to_open_position = {position.trade_pair: position for position in positions}
                 self._enforce_num_open_order_limit(trade_pair_to_open_position, signal_to_order)
                 open_position = self._get_or_create_open_position(signal_to_order, miner_hotkey, trade_pair_to_open_position, miner_order_uuid)
                 if open_position:
+                    net_portfolio_leverage = self.position_manager.calculate_net_portfolio_leverage(miner_hotkey)
                     self.enforce_order_cooldown(signal_to_order, open_position)
-                    open_position.add_order(signal_to_order)
+                    open_position.add_order(signal_to_order, net_portfolio_leverage)
                     self.position_manager.save_miner_position_to_disk(open_position)
                     bt.logging.info(
                         f"Position {open_position.trade_pair.trade_pair_id} for miner [{miner_hotkey}] updated.")
@@ -652,8 +660,6 @@ class Validator:
                     pass
                 # Update the last received order time
                 self.timestamp_manager.update_timestamp(signal_to_order)
-
-            # self.plagiarism_detector.check_plagiarism(open_position, signal_to_order)
 
         except SignalException as e:
             error_message = f"Error processing order for [{miner_hotkey}] with error [{e}]"
