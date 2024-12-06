@@ -5,16 +5,16 @@ from copy import deepcopy
 
 from vali_objects.position import CRYPTO_CARRY_FEE_PER_INTERVAL, FOREX_CARRY_FEE_PER_INTERVAL, \
     INDICES_CARRY_FEE_PER_INTERVAL
-from tests.shared_objects.mock_classes import MockMetagraph
+from tests.shared_objects.mock_classes import MockMetagraph, MockLivePriceFetcher
 from tests.vali_tests.base_objects.test_base import TestBase
-from vali_config import TradePair, ValiConfig
+from vali_objects.vali_config import TradePair, ValiConfig
+from vali_objects.utils import leverage_utils
 from vali_objects.utils.leverage_utils import LEVERAGE_BOUNDS_V2_START_TIME_MS, get_position_leverage_bounds
 from vali_objects.enums.order_type_enum import OrderType
 from vali_objects.position import Position, FEE_V6_TIME_MS
-from vali_objects.utils.live_price_fetcher import LivePriceFetcher
 from vali_objects.utils.position_manager import PositionManager
 from vali_objects.utils.vali_utils import ValiUtils
-from vali_objects.vali_dataclasses.order import Order
+from vali_objects.vali_dataclasses.order import Order, ORDER_SRC_ELIMINATION_FLAT, ORDER_SRC_DEPRECATION_FLAT
 from time_util.time_util import MS_IN_8_HOURS, MS_IN_24_HOURS
 
 
@@ -23,8 +23,7 @@ class TestPositions(TestBase):
     def setUp(self):
         super().setUp()
         secrets = ValiUtils.get_secrets(running_unit_tests=True)
-        secrets["twelvedata_apikey"] = secrets["twelvedata_apikey"]
-        self.live_price_fetcher = LivePriceFetcher(secrets=secrets, disable_ws=True)
+        self.live_price_fetcher = MockLivePriceFetcher(secrets=secrets, disable_ws=True)
         self.DEFAULT_MINER_HOTKEY = "test_miner"
         self.DEFAULT_POSITION_UUID = "test_position"
         self.DEFAULT_OPEN_MS = 1000
@@ -36,12 +35,12 @@ class TestPositions(TestBase):
             trade_pair=self.DEFAULT_TRADE_PAIR,
         )
         self.mock_metagraph = MockMetagraph([self.DEFAULT_MINER_HOTKEY])
-        self.position_manager = PositionManager(metagraph=self.mock_metagraph, running_unit_tests=True)
+        self.position_manager = PositionManager(metagraph=self.mock_metagraph, running_unit_tests=True, live_price_fetcher=self.live_price_fetcher)
         self.position_manager.init_cache_files()
         self.position_manager.clear_all_miner_positions_from_disk()
 
     def add_order_to_position_and_save_to_disk(self, position, order):
-        position.add_order(order)
+        position.add_order(order, self.position_manager.calculate_net_portfolio_leverage(self.DEFAULT_MINER_HOTKEY))
         self.position_manager.save_miner_position_to_disk(position)
 
     def _find_disk_position_from_memory_position(self, position):
@@ -106,7 +105,7 @@ class TestPositions(TestBase):
 
         for start, end, expected_leverage in test_intervals:
             msg = f"start: {start}, end: {end}, expected_leverage: {expected_leverage}"
-            self.assertAlmostEquals(position.max_leverage_seen_in_interval(start, end), expected_leverage, 7, msg)
+            self.assertAlmostEqual(position.max_leverage_seen_in_interval(start, end), expected_leverage, 7, msg)
 
         # throw an exception for invalid interval
         invalid_intervals = [
@@ -175,7 +174,7 @@ class TestPositions(TestBase):
 
         for start, end, expected_leverage in test_intervals:
             msg = f"start: {start}, end: {end}, expected_leverage: {expected_leverage}"
-            self.assertAlmostEquals(position.max_leverage_seen_in_interval(start, end), expected_leverage, 7, msg)
+            self.assertAlmostEqual(position.max_leverage_seen_in_interval(start, end), expected_leverage, 7, msg)
 
     def test_simple_long_position_with_explicit_FLAT(self):
         position = deepcopy(self.default_position)
@@ -539,7 +538,8 @@ class TestPositions(TestBase):
         })
 
         # Orders post-liquidation are ignored
-        self.add_order_to_position_and_save_to_disk(position, o3)
+        with self.assertRaises(ValueError):
+            self.add_order_to_position_and_save_to_disk(position, o3)
         self.validate_intermediate_position_state(position, {
             'orders': [o1, o2],
             'position_type': OrderType.FLAT,
@@ -614,7 +614,8 @@ class TestPositions(TestBase):
         })
 
         # Orders post-liquidation are ignored
-        self.add_order_to_position_and_save_to_disk(position, o3)
+        with self.assertRaises(ValueError):
+            self.add_order_to_position_and_save_to_disk(position, o3)
         self.validate_intermediate_position_state(position, {
             'orders': [o1, o2],
             'position_type': OrderType.FLAT,
@@ -1010,7 +1011,7 @@ class TestPositions(TestBase):
         })
 
         self.assertEqual(position.max_leverage_seen(), 1.1)
-        self.assertAlmostEquals(position.get_cumulative_leverage(), 1.2, 8)
+        self.assertAlmostEqual(position.get_cumulative_leverage(), 1.2, 8)
 
     def test_returns_on_large_price_increase(self):
         o1 = Order(order_type=OrderType.LONG,
@@ -1286,6 +1287,9 @@ class TestPositions(TestBase):
                          FOREX_CARRY_FEE_PER_INTERVAL ** position2.max_leverage_seen())
 
     def test_transition_to_positional_leverage_v2_high_positive_leverage(self):
+        """
+        leverage v1 could exceed the new leverage v2 limits. do not allow any orders that do not decrease the leverage
+        """
         position = deepcopy(self.default_position)
         live_price = 69000
         min_allowed_leverage, max_allowed_leverage = get_position_leverage_bounds(TradePair.BTCUSD,
@@ -1303,8 +1307,9 @@ class TestPositions(TestBase):
                    processed_ms=LEVERAGE_BOUNDS_V2_START_TIME_MS + 1,
                    order_uuid="2000")
 
-        for order in [o1, o2]:
-            self.add_order_to_position_and_save_to_disk(position, order)
+        self.add_order_to_position_and_save_to_disk(position, o1)
+        with self.assertRaises(ValueError):
+            self.add_order_to_position_and_save_to_disk(position, o2)
 
         self.validate_intermediate_position_state(position, {
             'orders': [o1],
@@ -1444,6 +1449,9 @@ class TestPositions(TestBase):
         })
 
     def test_transition_to_positional_leverage_v2_high_negative_leverage(self):
+        """
+        leverage v1 could exceed the new leverage v2 limits. do not allow any orders that do not decrease the leverage
+        """
         position = deepcopy(self.default_position)
         live_price = 69000
         min_allowed_leverage, max_allowed_leverage = get_position_leverage_bounds(TradePair.BTCUSD,
@@ -1461,8 +1469,9 @@ class TestPositions(TestBase):
                    processed_ms=LEVERAGE_BOUNDS_V2_START_TIME_MS + 1,
                    order_uuid="2000")
 
-        for order in [o1, o2]:
-            self.add_order_to_position_and_save_to_disk(position, order)
+        self.add_order_to_position_and_save_to_disk(position, o1)
+        with self.assertRaises(ValueError):
+            self.add_order_to_position_and_save_to_disk(position, o2)
 
         self.validate_intermediate_position_state(position, {
             'orders': [o1],
@@ -1612,8 +1621,9 @@ class TestPositions(TestBase):
                    processed_ms=2000,
                    order_uuid="2000")
 
-        for order in [o1, o2]:
-            self.add_order_to_position_and_save_to_disk(position, order)
+        self.add_order_to_position_and_save_to_disk(position, o1)
+        with self.assertRaises(ValueError):
+            self.add_order_to_position_and_save_to_disk(position, o2)
 
         self.validate_intermediate_position_state(position, {
             'orders': [o1],
@@ -1650,8 +1660,9 @@ class TestPositions(TestBase):
                    processed_ms=LEVERAGE_BOUNDS_V2_START_TIME_MS + 2000,
                    order_uuid="2000")
 
-        for order in [o1, o2]:
-            self.add_order_to_position_and_save_to_disk(position, order)
+        self.add_order_to_position_and_save_to_disk(position, o1)
+        with self.assertRaises(ValueError):
+            self.add_order_to_position_and_save_to_disk(position, o2)
 
         self.validate_intermediate_position_state(position, {
             'orders': [o1],
@@ -1797,8 +1808,9 @@ class TestPositions(TestBase):
                    processed_ms=2000,
                    order_uuid="2000")
 
-        for order in [o1, o2]:
-            self.add_order_to_position_and_save_to_disk(position, order)
+        self.add_order_to_position_and_save_to_disk(position, o1)
+        with self.assertRaises(ValueError):
+            self.add_order_to_position_and_save_to_disk(position, o2)
 
         self.validate_intermediate_position_state(position, {
             'orders': [o1],
@@ -1835,8 +1847,9 @@ class TestPositions(TestBase):
                    processed_ms=LEVERAGE_BOUNDS_V2_START_TIME_MS + 2000,
                    order_uuid="2000")
 
-        for order in [o1, o2]:
-            self.add_order_to_position_and_save_to_disk(position, order)
+        self.add_order_to_position_and_save_to_disk(position, o1)
+        with self.assertRaises(ValueError):
+            self.add_order_to_position_and_save_to_disk(position, o2)
 
         self.validate_intermediate_position_state(position, {
             'orders': [o1],
@@ -1856,6 +1869,202 @@ class TestPositions(TestBase):
 
         self.assertEqual(position.max_leverage_seen(), TradePair.BTCUSD.max_leverage)
         self.assertEqual(position.get_cumulative_leverage(), TradePair.BTCUSD.max_leverage)
+
+    def test_long_order_leverage_already_at_portfolio_limit(self):
+        """
+        3 positions, first 2 get us to portfolio max, and then 3rd attempts to exceed it. order is skipped.
+        """
+        position = deepcopy(self.default_position)
+        position.trade_pair = TradePair.AUDCAD
+        o1 = Order(order_type=OrderType.LONG,
+                   leverage=TradePair.AUDCAD.max_leverage,
+                   price=100,
+                   trade_pair=TradePair.AUDCAD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 1000,
+                   order_uuid="1000")
+        self.add_order_to_position_and_save_to_disk(position, o1)
+
+        position2 = deepcopy(self.default_position)
+        position2.trade_pair = TradePair.BTCUSD
+        o2 = Order(order_type=OrderType.LONG,
+                   leverage=TradePair.BTCUSD.max_leverage,
+                   price=100,
+                   trade_pair=TradePair.BTCUSD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 1000,
+                   order_uuid="1000")
+        self.add_order_to_position_and_save_to_disk(position2, o2)
+        self.assertEqual(self.position_manager.calculate_net_portfolio_leverage(self.DEFAULT_MINER_HOTKEY), 10.0)
+
+        position3 = deepcopy(self.default_position)
+        position3.trade_pair = TradePair.ETHUSD
+        o3 = Order(order_type=OrderType.LONG,
+                   leverage=0.1,
+                   price=100,
+                   trade_pair=TradePair.ETHUSD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 2000,
+                   order_uuid="2000")
+
+        with self.assertRaises(ValueError):
+            self.add_order_to_position_and_save_to_disk(position3, o3)
+            self.assertEqual(len(position3.orders), 0)
+
+    def test_long_order_crypto_leverage_exceed_portfolio_limit(self):
+        """
+        3 positions, 2 positions within the portfolio leverage max, but the third order will exceed the max and gets clamped
+        """
+        position = deepcopy(self.default_position)
+        position.trade_pair=TradePair.AUDCAD
+        o1 = Order(order_type=OrderType.LONG,
+                   leverage=TradePair.AUDCAD.max_leverage,
+                   price=100,
+                   trade_pair=TradePair.AUDCAD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 1000,
+                   order_uuid="1000")
+        self.add_order_to_position_and_save_to_disk(position, o1)
+
+        position2 = deepcopy(self.default_position)
+        position2.trade_pair=TradePair.BTCUSD
+        o2 = Order(order_type=OrderType.LONG,
+                   leverage=TradePair.BTCUSD.max_leverage - 0.1,
+                   price=100,
+                   trade_pair=TradePair.BTCUSD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 1000,
+                   order_uuid="1000")
+        self.add_order_to_position_and_save_to_disk(position2, o2)
+        self.assertEqual(self.position_manager.calculate_net_portfolio_leverage(self.DEFAULT_MINER_HOTKEY), 9.0)
+
+        position3 = deepcopy(self.default_position)
+        position3.trade_pair=TradePair.ETHUSD
+        o3 = Order(order_type=OrderType.LONG,
+                   leverage=0.2,
+                   price=100,
+                   trade_pair=TradePair.ETHUSD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 2000,
+                   order_uuid="2000")
+
+        with self.assertLogs('root', level='DEBUG') as logger:
+            self.add_order_to_position_and_save_to_disk(position3, o3)
+            # print(logger.output)
+            self.assertEqual(position3.orders[0].leverage, 0.1)
+            self.assertEqual([f"WARNING:root:Miner {self.DEFAULT_MINER_HOTKEY} ETHUSD order leverage clamped to 0.1"], logger.output)
+
+    def test_long_order_forex_leverage_exceed_portfolio_limit(self):
+        """
+        3 positions, 2 positions within the portfolio leverage max, but the third order will exceed the max and gets clamped
+        """
+        position = deepcopy(self.default_position)
+        position.trade_pair=TradePair.AUDCAD
+        o1 = Order(order_type=OrderType.LONG,
+                   leverage=TradePair.AUDCAD.max_leverage,
+                   price=100,
+                   trade_pair=TradePair.AUDCAD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 1000,
+                   order_uuid="1000")
+        self.add_order_to_position_and_save_to_disk(position, o1)
+
+        position2 = deepcopy(self.default_position)
+        position2.trade_pair=TradePair.AUDUSD
+        o2 = Order(order_type=OrderType.LONG,
+                   leverage=TradePair.AUDUSD.max_leverage - 1,
+                   price=100,
+                   trade_pair=TradePair.AUDUSD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 1000,
+                   order_uuid="1000")
+        self.add_order_to_position_and_save_to_disk(position2, o2)
+        self.assertEqual(self.position_manager.calculate_net_portfolio_leverage(self.DEFAULT_MINER_HOTKEY), 9.0)
+
+        position3 = deepcopy(self.default_position)
+        position3.trade_pair=TradePair.AUDJPY
+        o3 = Order(order_type=OrderType.LONG,
+                   leverage=2,
+                   price=100,
+                   trade_pair=TradePair.AUDJPY,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 2000,
+                   order_uuid="2000")
+
+        with self.assertLogs('root', level='DEBUG') as logger:
+            self.add_order_to_position_and_save_to_disk(position3, o3)
+            # print(logger.output)
+            self.assertEqual(position3.orders[0].leverage, 1)
+            self.assertEqual([f"WARNING:root:Miner {self.DEFAULT_MINER_HOTKEY} AUDJPY order leverage clamped to 1.0"], logger.output)
+
+    def test_short_order_leverage_exceed_portfolio_limit(self):
+        """
+        3 positions, 2 positions within the portfolio leverage max, but the third order will exceed the max and gets clamped
+        """
+        position = deepcopy(self.default_position)
+        position.trade_pair = TradePair.AUDCAD
+        o1 = Order(order_type=OrderType.SHORT,
+                   leverage=-TradePair.AUDCAD.max_leverage,
+                   price=100,
+                   trade_pair=TradePair.AUDCAD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 1000,
+                   order_uuid="1000")
+        self.add_order_to_position_and_save_to_disk(position, o1)
+
+        position2 = deepcopy(self.default_position)
+        position2.trade_pair = TradePair.BTCUSD
+        o2 = Order(order_type=OrderType.SHORT,
+                   leverage=-(TradePair.BTCUSD.max_leverage - 0.1),
+                   price=100,
+                   trade_pair=TradePair.BTCUSD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 1000,
+                   order_uuid="1000")
+        self.add_order_to_position_and_save_to_disk(position2, o2)
+        self.assertEqual(self.position_manager.calculate_net_portfolio_leverage(self.DEFAULT_MINER_HOTKEY), 9.0)
+
+        position3 = deepcopy(self.default_position)
+        position3.trade_pair = TradePair.ETHUSD
+        # position3.position_type = OrderType.SHORT
+        o3 = Order(order_type=OrderType.SHORT,
+                   leverage=-0.2,
+                   price=100,
+                   trade_pair=TradePair.ETHUSD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 2000,
+                   order_uuid="2000")
+
+        with self.assertLogs('root', level='DEBUG') as logger:
+            self.add_order_to_position_and_save_to_disk(position3, o3)
+            # print(logger.output)
+            self.assertEqual(position3.orders[0].leverage, -0.1)
+            self.assertEqual([f"WARNING:root:Miner {self.DEFAULT_MINER_HOTKEY} ETHUSD order leverage clamped to -0.1"], logger.output)
+
+    def test_position_below_min_while_portfolio_lev_exceeded(self):
+        """
+        bringing a position below the position min while the portfolio leverage is being exceeded should not be allowed
+        """
+        position1 = deepcopy(self.default_position)
+        position1.trade_pair = TradePair.USDCAD
+        o1 = Order(order_type=OrderType.LONG,
+                   leverage=50,
+                   price=100,
+                   trade_pair=TradePair.USDCAD,
+                   processed_ms=leverage_utils.LEVERAGE_BOUNDS_V2_START_TIME_MS - 1000,
+                   order_uuid="1000")
+        self.add_order_to_position_and_save_to_disk(position1, o1)
+
+        position2 = deepcopy(self.default_position)
+        position2.trade_pair = TradePair.AUDCAD
+        o2 = Order(order_type=OrderType.LONG,
+                   leverage=50,
+                   price=100,
+                   trade_pair=TradePair.AUDCAD,
+                   processed_ms=leverage_utils.LEVERAGE_BOUNDS_V2_START_TIME_MS - 1000,
+                   order_uuid="1000")
+        self.add_order_to_position_and_save_to_disk(position2, o2)
+
+        o3 = Order(order_type=OrderType.SHORT,
+                   leverage=49.99,
+                   price=100,
+                   trade_pair=TradePair.AUDCAD,
+                   processed_ms=leverage_utils.PORTFOLIO_LEVERAGE_BOUNDS_START_TIME_MS + 1000,
+                   order_uuid="1000")
+        with self.assertRaises(ValueError):
+            self.add_order_to_position_and_save_to_disk(position2, o3)
+
+        # the o3 order should be skipped since it would bring the position net leverage below min leverage.
+        self.assertEqual(position2.net_leverage, 50)
+
 
     def test_position_json(self):
         position = deepcopy(self.default_position)
@@ -1902,6 +2111,66 @@ class TestPositions(TestBase):
 
         for x in recreated_object.orders:
             self.assertTrue(hasattr(x, 'trade_pair'), recreated_object)
+
+    def test_fake_flat_order(self):
+        position = deepcopy(self.default_position)
+        position.orders = []
+        for i in range(10):
+            o = Order(order_type=OrderType.LONG,
+                      leverage=.1 + i / 10,
+                      price=100,
+                      trade_pair=TradePair.BTCUSD,
+                      processed_ms=1000 + i * 10,
+                      order_uuid=str(i))
+            position.orders.append(o)
+        position.rebuild_position_with_updated_orders()
+        orig_return = position.return_at_close
+        n_orders_orig = len(position.orders)
+
+        fake_flat_order = Order(price=0,
+                           processed_ms=12345,
+                           order_uuid=position.position_uuid[::-1],
+                           # determinstic across validators. Won't mess with p2p sync
+                           trade_pair=position.trade_pair,
+                           order_type=OrderType.FLAT,
+                           leverage=0,
+                           src=ORDER_SRC_ELIMINATION_FLAT)
+        position.add_order(fake_flat_order)
+        assert orig_return == position.return_at_close
+        assert len(position.orders) == n_orders_orig + 1
+
+        position.rebuild_position_with_updated_orders()
+        assert orig_return == position.return_at_close
+        assert len(position.orders) == n_orders_orig + 1
+
+    def test_deprecated_tp_position(self):
+        """
+        an open position with a deprecated hotkey should be closed
+        """
+        position = Position(
+            miner_hotkey=self.DEFAULT_MINER_HOTKEY,
+            position_uuid=self.DEFAULT_POSITION_UUID,
+            open_ms=self.DEFAULT_OPEN_MS,
+            trade_pair=TradePair.DJI
+        )
+        for i in range(3):
+            o = Order(order_type=OrderType.LONG,
+                      leverage=.1 + i / 10,
+                      price=100,
+                      trade_pair=TradePair.DJI,
+                      processed_ms=1000 + i * 10,
+                      order_uuid=str(i))
+            self.add_order_to_position_and_save_to_disk(position, o)
+        position.rebuild_position_with_updated_orders()
+
+        assert len(position.orders) == 3
+        assert not position.is_closed_position
+        self.position_manager.close_open_orders_for_suspended_trade_pairs()
+        position = self._find_disk_position_from_memory_position(position)
+        print(position)
+        assert len(position.orders) == 4
+        assert position.is_closed_position
+        assert position.orders[-1].src == ORDER_SRC_DEPRECATION_FLAT
 
 
 if __name__ == '__main__':

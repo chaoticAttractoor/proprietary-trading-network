@@ -3,7 +3,7 @@ from typing import Union
 import numpy as np
 import math
 
-from vali_config import ValiConfig
+from vali_objects.vali_config import ValiConfig
 from vali_objects.position import Position
 from vali_objects.utils.functional_utils import FunctionalUtils
 
@@ -53,7 +53,9 @@ class PositionPenalties:
             time_window = ValiConfig.POSITIONAL_RETURN_TIME_WINDOW_MS
 
         close_times = np.array([position.close_ms for position in positions])
-        returns = np.log([position.return_at_close for position in positions])
+        returns = np.log([
+            max(position.return_at_close, .00001)  # Prevent math domain error
+            for position in positions])
         total_return = np.sum(returns)
 
         # If there is no return, the ratio is 1, as our denominator is invalid
@@ -84,6 +86,7 @@ class PositionPenalties:
             largest_windowed_contribution = min(sums_in_window)
 
         return np.clip(largest_windowed_contribution / total_return, 0, 1)
+
 
     @staticmethod
     def returns_ratio_penalty(
@@ -120,7 +123,9 @@ class PositionPenalties:
             positions: list[Position] - the list of positions
         """
         closed_positions = [position for position in positions if position.is_closed_position]
-        closed_position_returns = [math.log(position.return_at_close) for position in closed_positions]
+        closed_position_returns = [math.log(
+                                        max(position.return_at_close, .00001))  # Prevent math domain error
+                                    for position in closed_positions]
         closed_return = sum(closed_position_returns)
 
         # Return early if there will be an issue with the ratio denominator

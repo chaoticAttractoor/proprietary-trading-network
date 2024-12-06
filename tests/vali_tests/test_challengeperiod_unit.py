@@ -5,9 +5,9 @@ import math
 from tests.vali_tests.base_objects.test_base import TestBase
 from tests.shared_objects.test_utilities import generate_ledger
 
-from vali_config import TradePair
+from vali_objects.vali_config import TradePair
 from vali_objects.position import Position
-from vali_config import ValiConfig
+from vali_objects.vali_config import ValiConfig
 
 from tests.shared_objects.mock_classes import (
     MockMetagraph, MockChallengePeriodManager, MockPositionManager, MockPerfLedgerManager, MockCacheController
@@ -263,7 +263,7 @@ class TestChallengePeriodUnit(TestBase):
         self.assertGreater(max_drawdown_percentage, ValiConfig.CHALLENGE_PERIOD_MAX_DRAWDOWN_PERCENT)
 
         # Check that the miner is successfully screened as failing
-        screening_logic = self.challengeperiod_manager.screen_failing_criteria(ledger_element=base_ledger)
+        screening_logic, _ = self.challengeperiod_manager.screen_failing_criteria(ledger_element=base_ledger)
         self.assertTrue(screening_logic)
 
     def test_pass_returns_ratio(self):

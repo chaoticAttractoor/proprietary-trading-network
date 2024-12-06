@@ -3,7 +3,7 @@
 import shutil
 
 from time_util.time_util import TimeUtil
-from vali_config import ValiConfig
+from vali_objects.vali_config import ValiConfig
 from shared_objects.cache_controller import CacheController
 from vali_objects.utils.vali_bkp_utils import ValiBkpUtils
 
@@ -31,7 +31,7 @@ class EliminationManager(CacheController):
         bt.logging.info("running elimination manager")
         with self.eliminations_lock:
             self.eliminations = self.get_eliminations_from_disk()
-        self._handle_plagiarism_eliminations()
+        # self._handle_plagiarism_eliminations()
         self._delete_eliminated_expired_miners()
         self.set_last_update_time()
 

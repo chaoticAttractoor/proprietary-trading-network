@@ -2,7 +2,7 @@
 
 import time
 import bittensor as bt
-from vali_config import ValiConfig
+from vali_objects.vali_config import ValiConfig
 from shared_objects.cache_controller import CacheController
 from vali_objects.scoring.scoring import Scoring
 from time_util.time_util import TimeUtil
@@ -105,7 +105,9 @@ class ChallengePeriodManager(CacheController):
         # A perf ledger can never begin before the first order. Edge case confirmed.
         ans = time_of_ledger_start < time_of_first_order
         if ans:
-            msg = f'Hotkey {hotkey} has a ledger start time of {TimeUtil.millis_to_formatted_date_str(time_of_ledger_start)} and a first order time of {TimeUtil.millis_to_formatted_date_str(time_of_first_order)}'
+            msg = (f'Hotkey {hotkey} has a ledger start time of {TimeUtil.millis_to_formatted_date_str(time_of_ledger_start)},'
+                   f' a first order time of {TimeUtil.millis_to_formatted_date_str(time_of_first_order)}, and an'
+                   f' initialization time of {TimeUtil.millis_to_formatted_date_str(ledger.initialization_time_ms)}.')
             print(msg)
         return ans
 
@@ -151,13 +153,15 @@ class ChallengePeriodManager(CacheController):
             if not passing_criteria:
                 if not time_criteria:
                     # If the miner registers, never interacts
+                    bt.logging.info(f'Hotkey {hotkey} has no positions or ledger, and has not interacted since registration. cp_failed')
                     failing_miners.append(hotkey)
 
                 continue  # Moving on, as the miner is already failing
 
             # This step we want to check their failure criteria. If they fail, we can move on.
-            failing_criteria = ChallengePeriodManager.screen_failing_criteria(ledger_element=ledger[hotkey])
+            failing_criteria, recorded_drawdown_percentage = ChallengePeriodManager.screen_failing_criteria(ledger_element=ledger[hotkey])
             if failing_criteria:
+                bt.logging.info(f'Hotkey {hotkey} has failed the challenge period due to drawdown {recorded_drawdown_percentage}. cp_failed')
                 failing_miners.append(hotkey)
                 continue
 
@@ -176,6 +180,7 @@ class ChallengePeriodManager(CacheController):
 
             # If their time is ever up, they fail
             if not time_criteria:
+                bt.logging.info(f'Hotkey {hotkey} has failed the challenge period due to time. cp_failed')
                 failing_miners.append(hotkey)
                 continue
 
@@ -255,15 +260,15 @@ class ChallengePeriodManager(CacheController):
     @staticmethod
     def screen_failing_criteria(
         ledger_element: PerfLedgerData
-    ) -> bool:
+    ) -> (bool, float):
         """
         Runs a screening process to eliminate miners who didn't pass the challenge period. Returns True if they fail.
         """
         if ledger_element is None:
-            return False
+            return False, 0
 
         if len(ledger_element.cps) == 0:
-            return False
+            return False, 0
 
         maximum_drawdown_percent = ValiConfig.CHALLENGE_PERIOD_MAX_DRAWDOWN_PERCENT
 
@@ -273,5 +278,5 @@ class ChallengePeriodManager(CacheController):
         # Drawdown is less than our maximum permitted drawdown
         max_drawdown_criteria = recorded_drawdown_percentage >= maximum_drawdown_percent
 
-        return max_drawdown_criteria
+        return max_drawdown_criteria, recorded_drawdown_percentage
 

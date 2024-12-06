@@ -1,24 +1,38 @@
 # developer: Taoshi
 import os
 import math
-from time_util.time_util import TimeUtil
 
 from enum import Enum
 
 from meta import load_version
-BASE_DIR = base_directory = os.path.dirname(os.path.abspath(__file__))
+
+BASE_DIR = base_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 meta_dict = load_version(os.path.join(base_directory, "meta", "meta.json"))
-meta_version = meta_dict.get("subnet_version", "x.x.x")
+if meta_dict is None:
+    #  Databricks
+    print('Unable to load meta_dict. This is expected if running on Databricks.')
+    meta_version = "x.x.x"
+else:
+    meta_version = meta_dict.get("subnet_version", "x.x.x")
 
 class TradePairCategory(str, Enum):
     CRYPTO = "crypto"
     FOREX = "forex"
     INDICES = "indices"
+    EQUITIES = "equities"
 
 
 class ValiConfig:
     # versioning
     VERSION = meta_version
+    DAYS_IN_YEAR = 252  # 252 trading days in a year
+    STATISTICAL_CONFIDENCE_MINIMUM_N = 60
+
+    # Market-specific configurations
+    ANNUAL_RISK_FREE_PERCENTAGE = 4.19  # From tbill rates
+    ANNUAL_RISK_FREE_DECIMAL = ANNUAL_RISK_FREE_PERCENTAGE / 100
+    DAILY_LOG_RISK_FREE_RATE = math.log(1 + ANNUAL_RISK_FREE_DECIMAL) / DAYS_IN_YEAR
+    MS_RISK_FREE_RATE = math.log(1 + ANNUAL_RISK_FREE_PERCENTAGE / 100) / (365 * 24 * 60 * 60 * 1000)
 
     # Time Configurations
     TARGET_CHECKPOINT_DURATION_MS = 1000 * 60 * 60 * 12  # 12 hours
@@ -40,6 +54,8 @@ class ValiConfig:
     FOREX_MAX_LEVERAGE = 5
     INDICES_MIN_LEVERAGE = 0.1
     INDICES_MAX_LEVERAGE = 5
+    EQUITIES_MIN_LEVERAGE = 0.1
+    EQUITIES_MAX_LEVERAGE = 5
 
     MAX_DAILY_DRAWDOWN = 0.95  # Portfolio should never fall below .95 x of initial value when measured day to day
     MAX_TOTAL_DRAWDOWN = 0.9  # Portfolio should never fall below .90 x of initial value when measured at any instant
@@ -49,22 +65,25 @@ class ValiConfig:
     ORDER_MIN_LEVERAGE = 0.001
     ORDER_MAX_LEVERAGE = 500
 
-    PLAGIARISM_MATCHING_TIME_RESOLUTION_MS = 1 * 60 * 1000  # 1 minute
+    PLAGIARISM_MATCHING_TIME_RESOLUTION_MS = 60 * 1000 * 2  # 2 minutes
     PLAGIARISM_THRESHOLD = 0.9
     PLAGIARISM_MAX_LAGS = 60
-    PLAGIARISM_LOOKBACK_RANGE_MS = 5 * 24 * 60 * 60 * 1000  # 5 days
-    PLAGIARISM_FOLLOWER_TIMELAG_THRESHOLD = 1.005
-    PLAGIARISM_FOLLOWER_SIMILARITY_THRESHOLD = 0.8
+    PLAGIARISM_LOOKBACK_RANGE_MS = 10 * 24 * 60 * 60 * 1000  # 10 days
+    PLAGIARISM_FOLLOWER_TIMELAG_THRESHOLD = 1.0005 
+    PLAGIARISM_FOLLOWER_SIMILARITY_THRESHOLD = 0.75
+    PLAGIARISM_REPORTING_THRESHOLD = 0.8
+    PLAGIARISM_REFRESH_TIME_MS = 1000 * 60 * 60 * 24 # 1 day
+    PLAGIARISM_ORDER_TIME_WINDOW_MS = 1000 * 60 * 60 * 12
+    PLAGIARISM_MINIMUM_FOLLOW_MS = 1000 * 10 # Minimum follow time of 10 seconds for each order
 
     HISTORICAL_DECAY_TIME_INTENSITY_COEFFICIENT = 0.18
-    DAYS_IN_YEAR = 365.25
 
     EPSILON = 1e-6
     RETURN_SHORT_LOOKBACK_TIME_MS = 5 * 24 * 60 * 60 * 1000  # 5 days
     RETURN_SHORT_LOOKBACK_LEDGER_WINDOWS = RETURN_SHORT_LOOKBACK_TIME_MS // TARGET_CHECKPOINT_DURATION_MS
 
     # Consistency spreads for max positional return
-    MAX_RETURN_SIGMOID_SHIFT = 0.25
+    MAX_RETURN_SIGMOID_SHIFT = 0.125
     MAX_RETURN_SIGMOID_SPREAD = 50
 
     # Consistency spreads for positional metrics
@@ -77,15 +96,21 @@ class ValiConfig:
     SET_WEIGHT_CHECKPOINT_CONSISTENCY_LOWER_BOUND = 0.0
     SET_WEIGHT_MINIMUM_TOTAL_CHECKPOINT_DURATION_MS = 5 * 60 * 60 * 1000  # 5 hours
 
+    # Abnormality detection
+    ABNORMALITY_SIGMOID_SHIFT = 2.0
+    ABNORMALITY_SIGMOID_SPREAD = 7.5
+    ABNORMALITY_BASELINE = 0.01
+
     # Consistency windowing
+    MIN_HHI_RETURN = 0.01
     DAILY_MS = 1000 * 60 * 60 * 24  # 1 day
     DAILY_CHECKPOINTS = DAILY_MS // TARGET_CHECKPOINT_DURATION_MS
-    DAILY_SIGMOID_SHIFT = 0.35
+    DAILY_SIGMOID_SHIFT = 0.45
     DAILY_SIGMOID_SPREAD = 35
 
     BIWEEKLY_MS = 1000 * 60 * 60 * 24 * 14  # two weeks
     BIWEEKLY_CHECKPOINTS = BIWEEKLY_MS // TARGET_CHECKPOINT_DURATION_MS
-    BIWEEKLY_SIGMOID_SHIFT = 0.5
+    BIWEEKLY_SIGMOID_SHIFT = 0.55
     BIWEEKLY_SIGMOID_SPREAD = 35
 
     MINIMUM_POSITION_DURATION_MS = 1 * 60 * 1000  # 1 minutes
@@ -97,35 +122,48 @@ class ValiConfig:
     CHECKPOINT_DURATION_RATIO = 0.5
     CHECKPOINT_DURATION_THRESHOLD = int(TARGET_LEDGER_WINDOW_MS * CHECKPOINT_DURATION_RATIO)
 
+    SHORT_LOOKBACK_WINDOW = 7 * DAILY_CHECKPOINTS
+
+    # Concentration
+    POSITIONAL_CONCENTRATION_SIGMOID_SPREAD = 50
+    POSITIONAL_CONCENTRATION_SIGMOID_SHIFT = 0.2
+
     # Scoring weights
-    SCORING_RETURN_LONG_LOOKBACK_WEIGHT = 1.0
-    SCORING_RETURN_SHORT_LOOKBACK_WEIGHT = 0.25
-    SCORING_SHARPE_WEIGHT = 0.25
-    SCORING_OMEGA_WEIGHT = 0.25
+    SCORING_LONG_RETURN_LOOKBACK_WEIGHT = 0.2
+    SCORING_SHORT_RETURN_LOOKBACK_WEIGHT = 0.1
+    SCORING_SHARPE_WEIGHT = 0.175
+    SCORING_OMEGA_WEIGHT = 0.175
+    SCORING_SORTINO_WEIGHT = 0.175
+    SCORING_STATISTICAL_CONFIDENCE_WEIGHT = 0.175
 
     # Scoring hyperparameters
-    OMEGA_LOSS_MINIMUM = 0.02  # Equivalent to 2% loss
+    OMEGA_LOSS_MINIMUM = 0.01   # Equivalent to 1% loss
+    OMEGA_NOCONFIDENCE_VALUE = 0.0
     SHARPE_STDDEV_MINIMUM = 0.01  # Equivalent to 1% standard deviation
+    SHARPE_NOCONFIDENCE_VALUE = -100
+    SORTINO_DOWNSIDE_MINIMUM = 0.01  # Equivalent to 1% standard deviation
+    SORTINO_NOCONFIDENCE_VALUE = -100
+    STATISTICAL_CONFIDENCE_NOCONFIDENCE_VALUE = -100
 
     # MDD penalty calculation
-    APPROXIMATE_DRAWDOWN_PERCENTILE = 0.90
+    APPROXIMATE_DRAWDOWN_PERCENTILE = 0.75
     DRAWDOWN_UPPER_SCALING = 5
     DRAWDOWN_MAXVALUE_PERCENTAGE = 10
     DRAWDOWN_MINVALUE_PERCENTAGE = 0.5
 
     # Challenge period
-    CHALLENGE_PERIOD_WEIGHT = 5.4e-06  # essentially nothing
+    CHALLENGE_PERIOD_WEIGHT = 1.2e-05  # essentially nothing
     CHALLENGE_PERIOD_MS = 60 * 24 * 60 * 60 * 1000  # 60 days
     CHALLENGE_PERIOD_RETURN = 1.02
     CHALLENGE_PERIOD_RETURN_LOG = math.log(CHALLENGE_PERIOD_RETURN)
     CHALLENGE_PERIOD_RETURN_PERCENTAGE = (CHALLENGE_PERIOD_RETURN - 1) * 100
-    CHALLENGE_PERIOD_MAX_POSITIONAL_RETURNS_RATIO = 0.25  # one position shouldn't be more than 25% of the total returns
-    CHALLENGE_PERIOD_MAX_UNREALIZED_RETURNS_RATIO = 0.20  # one day shouldn't be more than 20% of the total returns
+    CHALLENGE_PERIOD_MAX_POSITIONAL_RETURNS_RATIO = 0.35  # one position shouldn't be more than 35% of the total returns
+    CHALLENGE_PERIOD_MAX_UNREALIZED_RETURNS_RATIO = 0.40  # one day shouldn't be more than 40% of the total returns
     CHALLENGE_PERIOD_MAX_DRAWDOWN_PERCENT = 5  # beyond 5% drawdown, they don't pass challenge
     CHALLENGE_PERIOD_MIN_POSITIONS = 10  # need at least 10 positions to pass challenge
 
     # Plagiarism
-    ORDER_SIMILARITY_WINDOW_MS = TimeUtil.hours_in_millis(24)
+    ORDER_SIMILARITY_WINDOW_MS = 60000 * 60 * 24
     MINER_COPYING_WEIGHT = 0.01
     MAX_MINER_PLAGIARISM_SCORE = 0.9  # want to make sure we're filtering out the bad actors
 
@@ -138,7 +176,7 @@ class ValiConfig:
     # Distributional statistics
     TOP_MINER_BENEFIT = 0.90
     TOP_MINER_PERCENT = 0.40
-    # SOFTMAX_TEMPERATURE = 0.25
+    SOFTMAX_TEMPERATURE = 0.2
 
     # Qualifications to be a trusted validator sending checkpoints
     TOP_N_CHECKPOINTS = 10
@@ -149,6 +187,8 @@ class ValiConfig:
     # Require at least this many successful checkpoints before building golden
     MIN_CHECKPOINTS_RECEIVED = 5
 
+    # Cap leverage across miner's entire portfolio
+    PORTFOLIO_LEVERAGE_CAP = 10
 
 assert ValiConfig.CRYPTO_MIN_LEVERAGE >= ValiConfig.ORDER_MIN_LEVERAGE
 assert ValiConfig.CRYPTO_MAX_LEVERAGE <= ValiConfig.ORDER_MAX_LEVERAGE
@@ -156,7 +196,8 @@ assert ValiConfig.FOREX_MIN_LEVERAGE >= ValiConfig.ORDER_MIN_LEVERAGE
 assert ValiConfig.FOREX_MAX_LEVERAGE <= ValiConfig.ORDER_MAX_LEVERAGE
 assert ValiConfig.INDICES_MIN_LEVERAGE >= ValiConfig.ORDER_MIN_LEVERAGE
 assert ValiConfig.INDICES_MAX_LEVERAGE <= ValiConfig.ORDER_MAX_LEVERAGE
-
+assert ValiConfig.EQUITIES_MIN_LEVERAGE >= ValiConfig.ORDER_MIN_LEVERAGE
+assert ValiConfig.EQUITIES_MAX_LEVERAGE <= ValiConfig.ORDER_MAX_LEVERAGE
 
 class TradePair(Enum):
     # crypto
@@ -164,6 +205,13 @@ class TradePair(Enum):
               TradePairCategory.CRYPTO]
     ETHUSD = ["ETHUSD", "ETH/USD", 0.001, ValiConfig.CRYPTO_MIN_LEVERAGE, ValiConfig.CRYPTO_MAX_LEVERAGE,
               TradePairCategory.CRYPTO]
+    SOLUSD = ["SOLUSD", "SOL/USD", 0.001, ValiConfig.CRYPTO_MIN_LEVERAGE, ValiConfig.CRYPTO_MAX_LEVERAGE,
+              TradePairCategory.CRYPTO]
+    XRPUSD = ["XRPUSD", "XRP/USD", 0.001, ValiConfig.CRYPTO_MIN_LEVERAGE, ValiConfig.CRYPTO_MAX_LEVERAGE,
+                TradePairCategory.CRYPTO]
+    DOGEUSD = ["DOGEUSD", "DOGE/USD", 0.001, ValiConfig.CRYPTO_MIN_LEVERAGE, ValiConfig.CRYPTO_MAX_LEVERAGE,
+                TradePairCategory.CRYPTO]
+
 
     # forex
     AUDCAD = ["AUDCAD", "AUD/CAD", 0.00007, ValiConfig.FOREX_MIN_LEVERAGE, ValiConfig.FOREX_MAX_LEVERAGE,
@@ -211,7 +259,21 @@ class TradePair(Enum):
     USDMXN = ["USDMXN", "USD/MXN", 0.00007, ValiConfig.FOREX_MIN_LEVERAGE, ValiConfig.FOREX_MAX_LEVERAGE,
               TradePairCategory.FOREX]
 
-    # indices
+    # "Commodities" (Bundle with Forex for now)
+    XAUUSD = ["XAUUSD", "XAU/USD", 0.00007, ValiConfig.FOREX_MIN_LEVERAGE, ValiConfig.FOREX_MAX_LEVERAGE, TradePairCategory.FOREX]
+    XAGUSD = ["XAGUSD", "XAG/USD", 0.00007, ValiConfig.FOREX_MIN_LEVERAGE, ValiConfig.FOREX_MAX_LEVERAGE, TradePairCategory.FOREX]
+
+    # Equities
+    NVDA = ["NVDA", "NVDA", 0.00009, ValiConfig.EQUITIES_MIN_LEVERAGE, ValiConfig.EQUITIES_MAX_LEVERAGE, TradePairCategory.EQUITIES]
+    AAPL = ["AAPL", "AAPL", 0.00009, ValiConfig.EQUITIES_MIN_LEVERAGE, ValiConfig.EQUITIES_MAX_LEVERAGE, TradePairCategory.EQUITIES]
+    TSLA = ["TSLA", "TSLA", 0.00009, ValiConfig.EQUITIES_MIN_LEVERAGE, ValiConfig.EQUITIES_MAX_LEVERAGE, TradePairCategory.EQUITIES]
+    AMZN = ["AMZN", "AMZN", 0.00009, ValiConfig.EQUITIES_MIN_LEVERAGE, ValiConfig.EQUITIES_MAX_LEVERAGE, TradePairCategory.EQUITIES]
+    MSFT = ["MSFT", "MSFT", 0.00009, ValiConfig.EQUITIES_MIN_LEVERAGE, ValiConfig.EQUITIES_MAX_LEVERAGE, TradePairCategory.EQUITIES]
+    GOOG = ["GOOG", "GOOG", 0.00009, ValiConfig.EQUITIES_MIN_LEVERAGE, ValiConfig.EQUITIES_MAX_LEVERAGE, TradePairCategory.EQUITIES]
+    META = ["META", "META", 0.00009, ValiConfig.EQUITIES_MIN_LEVERAGE, ValiConfig.EQUITIES_MAX_LEVERAGE, TradePairCategory.EQUITIES]
+
+
+    # indices (no longer allowed for trading as we moved to equities tickers instead)
     SPX = ["SPX", "SPX", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
            TradePairCategory.INDICES]
     DJI = ["DJI", "DJI", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
@@ -220,8 +282,6 @@ class TradePair(Enum):
            TradePairCategory.INDICES]
     VIX = ["VIX", "VIX", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
            TradePairCategory.INDICES]
-
-    # Trade pairs not available for trading due to transitioning to Polygon.io which does not cutrrently support them.
     FTSE = ["FTSE", "FTSE", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
             TradePairCategory.INDICES]
     GDAXI = ["GDAXI", "GDAXI", 0.00009, ValiConfig.INDICES_MIN_LEVERAGE, ValiConfig.INDICES_MAX_LEVERAGE,
@@ -260,8 +320,19 @@ class TradePair(Enum):
         return self.trade_pair_category == TradePairCategory.FOREX
 
     @property
+    def is_equities(self):
+        return self.trade_pair_category == TradePairCategory.EQUITIES
+    @property
     def is_indices(self):
         return self.trade_pair_category == TradePairCategory.INDICES
+
+    @property
+    def leverage_multiplier(self) -> int:
+        trade_pair_leverage_multiplier = {TradePairCategory.CRYPTO: 10,
+                                          TradePairCategory.FOREX: 1,
+                                          TradePairCategory.INDICES: 1,
+                                          TradePairCategory.EQUITIES: 2}
+        return trade_pair_leverage_multiplier[self.trade_pair_category]
 
     @staticmethod
     def to_dict():
