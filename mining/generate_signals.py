@@ -22,6 +22,8 @@ from datetime import timedelta
 model = mining_utils.load_model()
 TP = 0.05 
 SL = -0.01
+TRAILING_STOP = 0.01 # 2% trailing stop (only active after reaching 2% profit)
+TRAILING_THRESHOLD = 0.02
 secrets_json_path = ValiConfig.BASE_DIR + "/mining/miner_secrets.json"
 # Define your API key
 if os.path.exists(secrets_json_path):
@@ -342,6 +344,7 @@ if __name__ == "__main__":
     order = None 
     triggered = False
     last_triggered_minute = None
+    highest_prices = {}
 
     while True: 
         current_time = datetime.now()
@@ -378,7 +381,7 @@ if __name__ == "__main__":
                     print(f'Last update: {btc.last_update}')
                     latest_data_time = pd.to_datetime(input['ds'].tail(1).values[0])  # Ensure this is a datetime object
                     #last_update_time = round_time_to_nearest_five_minutes(btc.last_update)  # Ensure this is a datetime object
-
+ 
                     # Perform the comparison if btc.last_update exists
                     if True:
                         # Proceed with the logic here
@@ -394,20 +397,38 @@ if __name__ == "__main__":
 
                                 current_pnl = None
                                 exit_long = False 
+                                if trade_opened not in highest_prices:
+                                   highest_prices[trade_opened] =  float(price)
                                 
                                     
                                 current_pnl = float(price) / lasttrade['open_price'].tail(1).values[0] - 1
-                                print(f'Current PnL is : {current_pnl}')
-                                    
-                                if current_pnl > TP :  
-                                    exit_long = True
-                                    print('Profit Target reached- exiting ')
-                                    
-                                if current_pnl < SL: 
-                                    exit_long = True
-                                    print('Stop Loss Triggered. ')
 
-                                
+                                print(f'Current PnL is : {current_pnl}')
+
+                                if float(price) > highest_prices[trade_opened]:
+                                     highest_prices[trade_opened] = float(price)
+
+                                open_price = float(asttrade['open_price'].tail(1).values[0])
+                                highest_price = highest_prices[trade_opened]
+                                print(f'Current highest price : {highest_price }')
+                                max_profit_difference = float(highest_price) - open_price
+                                trailing_stop_activated = current_pnl > TRAILING_THRESHOLD
+
+                                # Trailing stop only activates after reaching 2% gain
+                               # trailing_stop_activated = current_pnl >  TRAILING_THRESHOLD
+                                    
+                                if current_pnl > TP:
+                                    exit_long = True
+                                    print('Profit Target reached - exiting.')
+                                elif current_pnl < SL:
+                                    exit_long = True
+                                    print('Stop Loss Triggered.')
+                                elif trailing_stop_activated:
+                                    trailing_stop_price = open_price + 0.5 * max_profit_difference 
+                                    if float(price) < trailing_stop_price:
+                                        exit_long = True
+                                        print('Trailing Stop Loss Triggered at 50% of highest price.')           
+
                                 if (current_pnl is not None)  and (exit_long is True) :
                                     
                                     order = 'FLAT'
