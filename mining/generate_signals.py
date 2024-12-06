@@ -23,14 +23,14 @@ import strat_handler
 from mining.config import model_path 
 
 
-strategy_handler = StrategyHandler(
+strategy_handler = strat_handler.StrategyHandler(
    model_path=model_path ,
     #strategy_function=rsi_based_strategy,
    # data_processing_function=rsi_data_processing
 )
 #model = mining_utils.load_model()
-TP = 0.005 
-SL = -0.05
+TP = 0.05
+SL = -0.01
 secrets_json_path = ValiConfig.BASE_DIR + "/mining/miner_secrets.json"
 # Define your API key
 if os.path.exists(secrets_json_path):
@@ -429,7 +429,7 @@ if __name__ == "__main__":
                             preds = strategy_handler.single_predict(input.dropna())
                             print(f'prediction string is {preds.shape}')
                             modelname = str(model.models[0])
-                            
+
                             signals = strategy_handler.process_data_for_signals(predictions= preds, hist = input ,modelname=modelname ) 
                             processed_signals = strategy_handler.calculate_signals(signals)
                             order= strategy_handler.map_signals(processed_signals)
