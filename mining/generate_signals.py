@@ -395,6 +395,8 @@ if __name__ == "__main__":
                             if pd.isna(lasttrade['trade_closed'].iloc[-1]):
                                 print('Open trade detected. ')
 
+                                trade_opened = lasttrade['trade_opened'].tail(1).values[0]
+
                                 current_pnl = None
                                 exit_long = False 
                                 if trade_opened not in highest_prices:
