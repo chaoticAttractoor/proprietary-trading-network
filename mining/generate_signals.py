@@ -410,7 +410,7 @@ if __name__ == "__main__":
                                 if float(price) > highest_prices[trade_opened]:
                                      highest_prices[trade_opened] = float(price)
 
-                                open_price = float(asttrade['open_price'].tail(1).values[0])
+                                open_price = float(lasttrade['open_price'].tail(1).values[0])
                                 highest_price = highest_prices[trade_opened]
                                 print(f'Current highest price : {highest_price }')
                                 max_profit_difference = float(highest_price) - open_price
