@@ -47,7 +47,10 @@ def generate_signal_and_execute_trade(base_url='http://127.0.0.1:80'):
     if response.status_code == 200:
         print("Order successful:", response.json())
         handler = TradeHandler()
-        handler.set_position(price=0.0, new_position=order)  # Replace `0.0` with real price data
+        lasttrade = handler.check_last_trade()
+
+        if isinstance(lasttrade, pd.DataFrame) and not lasttrade.empty:
+            handler.set_position(price=0.0, new_position=order)  # Replace `0.0` with real price data
     else:
         print("Order failed with status code:", response.status_code)
 
