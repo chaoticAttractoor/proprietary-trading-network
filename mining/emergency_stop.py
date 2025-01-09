@@ -5,11 +5,10 @@ import json
 import time
 
 from vali_objects.enums.order_type_enum import OrderType
-from vali_config import TradePair
 import mining_utils 
 import pandas as pd
 from vali_objects.enums.order_type_enum import OrderType
-from vali_config import TradePair, TradePairCategory, ValiConfig
+from vali_objects.vali_config import TradePair, TradePairCategory, ValiConfig
 from datetime import datetime 
 import pickle
 import os
