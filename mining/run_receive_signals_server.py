@@ -5,14 +5,15 @@ import uuid
 from flask import Flask, request, jsonify
 
 import waitress
-
 from miner_config import MinerConfig
 from vali_objects.vali_config import TradePair, ValiConfig
 from vali_objects.enums.order_type_enum import OrderType
 from vali_objects.utils.vali_bkp_utils import ValiBkpUtils
 from vali_objects.vali_dataclasses.order_signal import Signal
+import bittensor as bt
 
 app = Flask(__name__)
+
 
 secrets_json_path = ValiConfig.BASE_DIR + "/mining/miner_secrets.json"
 # Define your API key
@@ -66,6 +67,7 @@ def handle_data():
         signal_file_uuid = str(uuid.uuid4())
         signal_path = os.path.join(MinerConfig.get_miner_received_signals_dir(), signal_file_uuid)
         ValiBkpUtils.write_file(signal_path, dict(signal))
+
     except IOError as e:
         print(traceback.format_exc())
         return jsonify({"error": f"Error writing signal to file: {e}"}), 500
