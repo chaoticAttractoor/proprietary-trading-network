@@ -6,6 +6,7 @@ scipy == 1.13.0
 pandas == 2.2.2
 flask == 3.0.3
 waitress == 2.1.2
+
 matplotlib == 3.9.0
 sortedcontainers == 2.4.0
 pandas-market-calendars == 4.4.0
