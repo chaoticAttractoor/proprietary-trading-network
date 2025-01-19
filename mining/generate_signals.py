@@ -18,12 +18,34 @@ import bittensor as bt
 import duckdb
 import numpy as np
 from datetime import timedelta 
+from dotenv import load_dotenv
+import requests
 
+load_dotenv()
 model = mining_utils.load_model()
 TP = 0.05 
 SL = -0.01
 TRAILING_STOP = 0.01 # 2% trailing stop (only active after reaching 2% profit)
 TRAILING_THRESHOLD = 0.02
+
+# Telegram Bot credentials
+BOT_TOKEN = os.environ.get('TG_BOT')
+CHAT_ID =  os.environ.get('TG_CHATID')
+
+def send_telegram_message(message):
+    """
+    Send a message to the specified Telegram chat using requests.
+    
+    Args:
+        message (str): The message to send.
+    """
+    url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
+    payload = {'chat_id': CHAT_ID, 'text': message}
+    requests.post(url, data=payload)
+
+
+
+
 secrets_json_path = ValiConfig.BASE_DIR + "/mining/miner_secrets.json"
 # Define your API key
 if os.path.exists(secrets_json_path):
@@ -455,7 +477,7 @@ if __name__ == "__main__":
 
                             old_position = btc.position_open
                                 
-                            btc.set_position(new_position=order,price=float(price) )
+                            btc.set_position(new_position=order,price=float(price) ) 
                             
                             new_position = btc.position_open 
                             
@@ -464,6 +486,9 @@ if __name__ == "__main__":
                                 
                                 print('Order Triggered.')
                                 bt.logging.info(f"Order Triggered.")
+                                # alert_message = {'position':order,'output': btc.pair , 'logs': output }
+                                # send_telegram_message(alert_message) 
+
 
                                     
                                 order_type = str_to_ordertype[btc.current_position]
