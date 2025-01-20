@@ -111,6 +111,8 @@ str_to_ordertype= {
      
 str_to_tradepair= { 
              'btcusd' : TradePair.BTCUSD, 
+             'ethusd' : TradePair.ETHUSD, 
+
                    }
 
 
@@ -360,7 +362,7 @@ if __name__ == "__main__":
     last = None
     last_logged_time = None
 
-    btc =  TradeHandler(pair='btcusd')
+    btc =  TradeHandler(pair='ethusd')
     bt.logging.info(f"Initialised trade handler.")
     bt.logging.info(f"Beginning loop.")
     order = None 
@@ -384,7 +386,7 @@ if __name__ == "__main__":
                     print(f'last logged time is : {last_logged_time}')
                     # load live data
                     order = None 
-                    input =   fetch_data_polygon('X:BTCUSD', API_KEY=POLYGON_API)
+                    input =   fetch_data_polygon('X:ETHUSD', API_KEY=POLYGON_API)
                     print(f'data shape if {input.shape}')
                     if input.shape[0] < 1999:
                         print(f'warning - polygon data has only returned {input.shape[0]} rows')
