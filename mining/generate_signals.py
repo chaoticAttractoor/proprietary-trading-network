@@ -488,8 +488,8 @@ if __name__ == "__main__":
                                 
                                 print('Order Triggered.')
                                 bt.logging.info(f"Order Triggered.")
-                                # alert_message = {'position':order,'output': btc.pair , 'logs': output }
-                                # send_telegram_message(alert_message) 
+                                alert_message = {'position ':order,'output ': btc.pair , 'logs ': output }
+                                send_telegram_message(alert_message) 
 
 
                                     
