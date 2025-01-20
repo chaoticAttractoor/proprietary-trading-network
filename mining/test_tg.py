@@ -20,5 +20,5 @@ def send_telegram_message(message):
     requests.post(url, data=payload)
 
 
-alert_message = {'test':'test'}
+alert_message = {'test':'test','how':'test'}
 send_telegram_message(alert_message) 
