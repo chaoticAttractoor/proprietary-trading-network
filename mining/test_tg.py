@@ -19,6 +19,8 @@ def send_telegram_message(message):
     payload = {'chat_id': CHAT_ID, 'text': message}
     requests.post(url, data=payload)
 
+one ='1'
+two = '2'
 
-alert_message = {'test':'test','how':'test'}
+alert_message = {f"this is {one} \n this is two: {two}"}
 send_telegram_message(alert_message) 
